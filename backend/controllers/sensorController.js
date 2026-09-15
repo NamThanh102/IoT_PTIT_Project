@@ -1,0 +1,250 @@
+import { pool } from '../config/db.js';
+import { env } from '../config/env.js';
+import { DataSensor } from '../models/DataSensor.js';
+import { Sensor } from '../models/Sensor.js';
+import { buildInsert, buildSelect, tableName } from '../utils/queryBuilder.js';
+import { parseFlexibleTime } from '../utils/timeRange.js';
+import { ok } from '../utils/response.js';
+import { badRequest } from '../utils/ApiError.js';
+import { getDeviceStatus } from './deviceController.js';
+
+const SENSOR_CODES = ['TEMP', 'HUMI', 'LIGHT'];
+let sensorIdCache = null;
+
+const GROUPED_SELECT = `
+  SELECT
+    d.time,
+    ROUND(MAX(CASE WHEN s.code = 'TEMP' THEN d.value END), 1) AS temperature,
+    ROUND(MAX(CASE WHEN s.code = 'HUMI' THEN d.value END), 1) AS humidity,
+    MAX(CASE WHEN s.code = 'LIGHT' THEN d.value END) AS light
+  FROM ${tableName('datasensors')} d
+  JOIN ${tableName('sensors')} s ON s.id = d.sensorID
+`;
+
+async function findSensorByCode(code) {
+  const { sql, params } = buildSelect(Sensor, {
+    columns: ['id'],
+    where: [{ sql: 'code = ?', params: [code] }],
+    limit: 1,
+  });
+  const [rows] = await pool.query(sql, params);
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function getSensorIds() {
+  if (!sensorIdCache) {
+    const map = {};
+    for (const code of SENSOR_CODES) {
+      map[code] = await findSensorByCode(code);
+    }
+    sensorIdCache = map;
+  }
+  return sensorIdCache;
+}
+
+async function getLatestSample() {
+  const sql = `${GROUPED_SELECT}
+    GROUP BY d.time
+    ORDER BY d.time DESC
+    LIMIT 1`;
+  const [rows] = await pool.query(sql);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function getRecentSamples(limitSamples) {
+  const safeLimit = Math.max(1, Math.min(Number(limitSamples) || 20, 200));
+  const sql = `${GROUPED_SELECT}
+    GROUP BY d.time
+    ORDER BY d.time DESC
+    LIMIT ${safeLimit}`;
+  const [rows] = await pool.query(sql);
+  return rows.reverse();
+}
+
+function buildDataConditions({ timeRange, sensorUid, sensorType, value }) {
+  const where = [];
+  if (timeRange) {
+    where.push({ sql: 'd.time >= ? AND d.time <= ?', params: [timeRange.start, timeRange.end] });
+  }
+  if (sensorUid) {
+    where.push({ sql: 's.sensor_uid = ?', params: [sensorUid] });
+  }
+  if (sensorType) {
+    where.push({ sql: 's.code = ?', params: [sensorType] });
+  }
+  if (value !== undefined && value !== null) {
+    where.push({ sql: 'd.value = ?', params: [value] });
+  }
+  return where;
+}
+
+async function findAllData({ limit, offset }, filters) {
+  const { sql, params } = buildSelect(DataSensor, {
+    columns: 'd.id, s.sensor_uid AS sensorID, s.name AS name, s.code AS sensorCode, d.value, d.time',
+    alias: 'd',
+    joins: `JOIN ${tableName('sensors')} s ON s.id = d.sensorID`,
+    where: buildDataConditions(filters),
+    order: 'd.time DESC, d.id DESC',
+    limit,
+    offset,
+  });
+  const [rows] = await pool.query(sql, params);
+  return rows;
+}
+
+async function countAllData(filters) {
+  const { sql, params } = buildSelect(DataSensor, {
+    columns: 'COUNT(*) AS total',
+    alias: 'd',
+    joins: filters.sensorType || filters.sensorUid ? `JOIN ${tableName('sensors')} s ON s.id = d.sensorID` : '',
+    where: buildDataConditions(filters),
+  });
+  const [rows] = await pool.query(sql, params);
+  return Number(rows[0].total);
+}
+
+async function insertSample({ userId, deviceId, sensorId, value, time }) {
+  const { sql, params } = buildInsert(DataSensor, {
+    userID: userId,
+    deviceID: deviceId,
+    sensorID: sensorId,
+    value,
+    time,
+  });
+  await pool.execute(sql, params);
+}
+
+function resolveFilters({ time, sensorId, type, value }) {
+  let timeRange = null;
+  try {
+    timeRange = parseFlexibleTime(time);
+  } catch {
+    timeRange = null;
+  }
+  if (time && !timeRange) {
+    throw badRequest('Dinh dang thoi gian khong hop le. Vi du: 2026 / 2026-08 / 2026-08-22 / "2026-08-22 10" / "2026-08-22 10:30" / "2026-08-22 10:30:45"');
+  }
+  const filters = { timeRange };
+  if (sensorId) {
+    filters.sensorUid = String(sensorId).trim();
+  }
+  if (type) {
+    const normalized = String(type).trim().toUpperCase();
+    if (!['TEMP', 'HUMI', 'LIGHT'].includes(normalized)) {
+      throw badRequest('type must be TEMP, HUMI, or LIGHT');
+    }
+    filters.sensorType = normalized;
+  }
+  if (value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      throw badRequest('value must be a number');
+    }
+    filters.value = num;
+  }
+  return filters;
+}
+
+async function queryAllData({ page = 1, limit = 10, time, sensorId, type, value }) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 100));
+  const offset = (safePage - 1) * safeLimit;
+
+  const filters = resolveFilters({ time, sensorId, type, value });
+  const [rows, total] = await Promise.all([
+    findAllData({ limit: safeLimit, offset }, filters),
+    countAllData(filters),
+  ]);
+
+  return {
+    rows,
+    pagination: {
+      current_page: safePage,
+      total_pages: Math.max(1, Math.ceil(total / safeLimit)),
+      total_records: total,
+    },
+  };
+}
+
+export async function saveSensorSample({ room, temp, humi, light }) {
+  const ids = await getSensorIds();
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const mysqlTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  const samples = [
+    { code: 'TEMP', value: temp },
+    { code: 'HUMI', value: humi },
+    { code: 'LIGHT', value: light },
+  ];
+
+  for (const sample of samples) {
+    if (sample.value === undefined || sample.value === null || Number.isNaN(Number(sample.value))) continue;
+    await insertSample({
+      userId: env.defaultUserId,
+      deviceId: env.sensorNodeDeviceId,
+      sensorId: ids[sample.code],
+      value: Number(sample.value),
+      time: mysqlTime,
+    });
+  }
+
+  return { room, savedAt: mysqlTime };
+}
+
+export async function getLatest(req, res, next) {
+  try {
+    const data = await getLatestSample();
+    return ok(res, { data, message: 'Lay du lieu cam bien moi nhat thanh cong' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getChart(req, res, next) {
+  try {
+    const limit = Number(req.query.limit) || 20;
+    const data = await getRecentSamples(limit);
+    return ok(res, { data, message: 'Lay du lieu bieu do thanh cong' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getDashboard(req, res, next) {
+  try {
+    const limit = Number(req.query.limit) || 30;
+    const [latest, chart, devices] = await Promise.all([
+      getLatestSample(),
+      getRecentSamples(limit),
+      getDeviceStatus(),
+    ]);
+    return ok(res, {
+      data: { latest, chart, devices },
+      message: 'Lay du lieu dashboard thanh cong',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getAllData(req, res, next) {
+  try {
+    const { page = 1, limit = 10, time, sensorId, type, value } = req.query;
+    const { rows, pagination } = await queryAllData({ page, limit, time, sensorId, type, value });
+    if (rows.length === 0 && (time || sensorId || type || value)) {
+      return ok(res, {
+        data: [],
+        pagination,
+        message: 'No matching records found',
+      });
+    }
+    return ok(res, {
+      data: rows,
+      pagination,
+      message: 'Lay du lieu thanh cong',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
