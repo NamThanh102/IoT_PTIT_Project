@@ -1,3 +1,15 @@
+/**
+ * server.js — Điểm khởi động Backend (Express)
+ *
+ * Tính năng:
+ * - Khởi tạo HTTP server + middleware toàn cục (CORS, JSON body)
+ * - Kết nối MQTT broker ngay khi start; broker tắt vẫn chạy REST (tự reconnect)
+ * - Gắn router /api (danh sách endpoint xem routes/api.js)
+ * - Graceful shutdown khi nhận SIGINT / SIGTERM
+ *
+ * Luồng: connectMqtt(sensorData→saveSensorSample, deviceResponse→handleDeviceResponse)
+ *        → app.listen(env.port). Toàn bộ endpoint REST nằm ở routes/api.js.
+ */
 import express from 'express';
 import cors from 'cors';
 import apiRoutes from './routes/api.js';

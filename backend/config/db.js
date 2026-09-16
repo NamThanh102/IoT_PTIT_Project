@@ -1,3 +1,13 @@
+/**
+ * config/db.js — Pool kết nối MySQL (mysql2/promise)
+ *
+ * Tính năng:
+ * - Tái sử dụng kết nối, giới hạn connectionLimit lấy từ env
+ * - dateStrings: true → cột DATETIME trả về chuỗi 'YYYY-MM-DD HH:MM:SS'
+ * - namedPlaceholders: true → hỗ trợ tham số dạng :name trong SQL
+ *
+ * Cách dùng: controller `import { pool } from '../config/db.js'` rồi pool.query().
+ */
 import mysql from 'mysql2/promise';
 import { env } from './env.js';
 

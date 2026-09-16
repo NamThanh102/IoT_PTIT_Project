@@ -1,3 +1,13 @@
+/**
+ * App.jsx — Định tuyến (routing) toàn ứng dụng
+ *
+ * - 4 trang lazy-load từng chunk riêng; pageLoader cache promise
+ *   → đổi tab không tải lại bundle.
+ * - Mọi route nằm trong <Layout> (Sidebar + Header) qua <Outlet/>;
+ *   path không khớp → redirect về /dashboard.
+ *
+ * Route: /dashboard, /datasensor, /actionhistory, /profile.
+ */
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout.jsx';

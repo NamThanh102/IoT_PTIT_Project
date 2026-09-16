@@ -1,3 +1,13 @@
+/**
+ * pages/Profile.jsx — Trang hồ sơ cá nhân
+ *
+ * Luồng dữ liệu:
+ * - useEffect gọi getProfile() 1 lần → data (name, msv, + 4 link tài liệu).
+ * - fallback tên/MSSV khi API chưa trả; avatar cố định "/avatar.jpg".
+ * - Giao diện: banner xanh + avatar + tên/role + MSSV + lưới 4 thẻ link
+ *   (GitHub, Figma, Postman=apidocs_link, Docs=baocao_link) mở tab mới.
+ * Icon các nền tảng là SVG inline định nghĩa ngay trong file.
+ */
 import { useEffect, useState } from 'react';
 import { getProfile } from '../api/index.js';
 
@@ -68,8 +78,8 @@ export default function Profile() {
 
   // Xử lý dữ liệu fallback nếu API chưa trả về kịp
   const name = data.name || 'Nguyễn Thành Nam';
-  const studentId = data.student_id || 'B23DCCN587';
-  const avatarUrl = data.avatar_url || '/avatar.jpg';
+  const studentId = data.msv || 'B23DCCN587';
+  const avatarUrl = '/avatar.jpg';
 
   const links = [
     { 

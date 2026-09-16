@@ -1,3 +1,10 @@
+/**
+ * middleware/error.middleware.js — Xử lý lỗi HTTP tập trung
+ *
+ * - notFoundHandler: endpoint không tồn tại (sau cùng của router) → 404 JSON
+ * - errorHandler: bắt mọi lỗi từ controller; nếu là ApiError thì dùng httpStatus,
+ *   lỗi ≥ 500 được log ra console; trả { status: 'error', message } kèm mã HTTP.
+ */
 export function notFoundHandler(req, res) {
   res.status(404).json({
     status: 'error',

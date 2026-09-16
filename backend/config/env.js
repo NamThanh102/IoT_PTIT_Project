@@ -1,3 +1,15 @@
+/**
+ * config/env.js — Đọc & chuẩn hóa cấu hình từ biến môi trường (.env)
+ *
+ * Vai trò: "nguồn sự thật" duy nhất về cấu hình; mọi module dùng `env`
+ * thay vì đọc process.env rải rác. Hàm toNumber cho fallback an toàn.
+ *
+ * Nhóm giá trị:
+ * - port: cổng HTTP server
+ * - db: host/port/user/password/database/connectionLimit (MySQL pool, xem db.js)
+ * - mqtt: url broker, username/password, room, timeout lệnh, các topic
+ * - defaultUserId: user mặc định cho /api/profile và cột userID trong action
+ */
 import 'dotenv/config';
 
 function toNumber(value, fallback) {
@@ -28,6 +40,5 @@ export const env = {
       deviceResponse: 'device_response',
     },
   },
-  sensorNodeDeviceId: toNumber(process.env.SENSOR_NODE_DEVICE_ID, 4),
-  defaultUserId: toNumber(process.env.DEFAULT_USER_ID, 1),
+  defaultUserId: process.env.DEFAULT_USER_ID || 'usrnamthan',
 };

@@ -1,3 +1,16 @@
+/**
+ * pages/Dashboard.jsx — Trang tổng quan: 3 thẻ số liệu + biểu đồ realtime + điều khiển LED
+ *
+ * Luồng dữ liệu (gọi thẳng các endpoint theo apidocs, poll 2s):
+ * - usePolling(getDataLatest, 2000, [], 'dashboard:latest')       → GET /data/latest
+ * - usePolling((s) => getDataChart(30, s), 2000, [], 'dashboard:chart') → GET /data/chart?limit=30
+ * - usePolling(getDeviceStatus, 2000, [], 'dashboard:devices')    → GET /device/status
+ * - latest → 3 StatCard; chart → Recharts LineChart (2 trục Y); devices → 2 card LED + ToggleSwitch.
+ * - isLive: dữ liệu trong 10 giây (STALE_MS) → chấm "Live", ngược lại "Sensor Offline".
+ *
+ * Điều khiển LED: `name` (LED_1/LED_2) là định danh gửi lệnh; `device_id` là khóa chính
+ * 10 ký tự (hiển thị trên card). Optimistic + xác nhận qua polling.
+ */
 import { useEffect, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
@@ -14,7 +27,7 @@ import ToggleSwitch from '../components/ToggleSwitch.jsx';
 import Toast from '../components/Toast.jsx';
 import { TempIcon, HumiIcon, LightIcon } from '../components/Icons.jsx';
 import { usePolling } from '../hooks/usePolling.js';
-import { getDashboard, postDeviceAction } from '../api/index.js';
+import { getDataLatest, getDataChart, getDeviceStatus, postDeviceAction } from '../api/index.js';
 
 const STALE_MS = 10000;
 const CONFIRM_WAIT_MS = 6000;
@@ -29,29 +42,31 @@ function parseTime(mysqlTime) {
 }
 
 export default function Dashboard() {
-  const dashboard = usePolling(getDashboard, 2000, [], 'dashboard');
+  const latestPoll = usePolling(getDataLatest, 2000, [], 'dashboard:latest');
+  const chartPoll = usePolling((signal) => getDataChart(30, signal), 2000, [], 'dashboard:chart');
+  const devicesPoll = usePolling(getDeviceStatus, 2000, [], 'dashboard:devices');
   const [pending, setPending] = useState({});
   const [toast, setToast] = useState(null);
   const pendingStartRef = useRef({});
 
-  const data = dashboard.data?.data || null;
-  const latest = data?.latest || null;
-  const chart = data?.chart || [];
-  const deviceList = data?.devices || [];
+  const pollError = latestPoll.error || chartPoll.error || devicesPoll.error;
+  const latest = latestPoll.data?.data || null;
+  const chart = chartPoll.data?.data || [];
+  const deviceList = devicesPoll.data?.data || [];
 
-  const latestAge = latest?.time ? Date.now() - parseTime(latest.time) : Number.POSITIVE_INFINITY;
-  const isLive = Boolean(latest) && !dashboard.error && latestAge < STALE_MS;
+  const latestAge = latest?.created_at ? Date.now() - parseTime(latest.created_at) : Number.POSITIVE_INFINITY;
+  const isLive = Boolean(latest) && !pollError && latestAge < STALE_MS;
 
   function displayedState(device) {
-    return pending[device.device_id] || device.state;
+    return pending[device.name] || device.state;
   }
 
-  function clearPending(deviceId) {
-    delete pendingStartRef.current[deviceId];
+  function clearPending(deviceName) {
+    delete pendingStartRef.current[deviceName];
     setPending((prev) => {
-      if (!(deviceId in prev)) return prev;
+      if (!(deviceName in prev)) return prev;
       const next = { ...prev };
-      delete next[deviceId];
+      delete next[deviceName];
       return next;
     });
   }
@@ -62,24 +77,24 @@ export default function Dashboard() {
     let changed = false;
     const next = { ...pending };
     for (const device of deviceList) {
-      const target = next[device.device_id];
+      const target = next[device.name];
       if (!target) continue;
-      const startedAt = pendingStartRef.current[device.device_id] || 0;
+      const startedAt = pendingStartRef.current[device.name] || 0;
       if (device.state === target) {
         setToast({
           type: 'success',
           message: `${device.name}: ${target === 'ON' ? 'bật' : 'tắt'} thành công`,
         });
-        delete next[device.device_id];
-        delete pendingStartRef.current[device.device_id];
+        delete next[device.name];
+        delete pendingStartRef.current[device.name];
         changed = true;
       } else if (now - startedAt > CONFIRM_WAIT_MS) {
         setToast({
           type: 'error',
           message: `${device.name}: ${target === 'ON' ? 'bật' : 'tắt'} thất bại`,
         });
-        delete next[device.device_id];
-        delete pendingStartRef.current[device.device_id];
+        delete next[device.name];
+        delete pendingStartRef.current[device.name];
         changed = true;
       }
     }
@@ -87,21 +102,21 @@ export default function Dashboard() {
   }, [deviceList, pending]);
 
   async function handleToggle(device) {
-    if (pending[device.device_id]) return;
+    if (pending[device.name]) return;
     const target = displayedState(device) === 'ON' ? 'OFF' : 'ON';
 
-    pendingStartRef.current[device.device_id] = Date.now();
-    setPending((prev) => ({ ...prev, [device.device_id]: target }));
+    pendingStartRef.current[device.name] = Date.now();
+    setPending((prev) => ({ ...prev, [device.name]: target }));
 
     try {
-      await postDeviceAction(device.device_id, target);
+      await postDeviceAction(device.name, target);
     } catch (error) {
       setToast({ type: 'error', message: `${device.name}: ${error.message}` });
-      clearPending(device.device_id);
+      clearPending(device.name);
     }
   }
 
-  const liveLabel = dashboard.loading && !data ? 'Connecting...' : isLive ? 'Live' : 'Sensor Offline';
+  const liveLabel = latestPoll.loading && !latest ? 'Connecting...' : isLive ? 'Live' : 'Sensor Offline';
 
   return (
     <div className="page">
@@ -124,7 +139,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon={<LightIcon />}
-          from="#fef9c3" to="#92400e" min={0} max={1000}
+          from="#fef9c3" to="#a6ff00" min={0} max={1500}
           label="Light"
           unit="lux"
           value={latest ? latest.light : null}
@@ -136,19 +151,19 @@ export default function Dashboard() {
           <h2 className="card-title">Realtime Sensor Data</h2>
           <span className={`live-dot${isLive ? '' : ' offline'}`}>{liveLabel}</span>
         </div>
-        {dashboard.error && (
-          <p className="error-text">Cannot load chart: {dashboard.error}</p>
+        {chartPoll.error && (
+          <p className="error-text">Cannot load chart: {chartPoll.error}</p>
         )}
-        {!dashboard.error && chart.length === 0 && !dashboard.loading && (
+        {!chartPoll.error && chart.length === 0 && !chartPoll.loading && (
           <p className="empty-text">No sensor data yet</p>
         )}
-        {!dashboard.error && chart.length > 0 && (
+        {!chartPoll.error && chart.length > 0 && (
           <div className="chart-body">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart} margin={{ top: 8, right: 50, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" />
                 <XAxis
-                  dataKey="time"
+                  dataKey="created_at"
                   tickFormatter={formatTime}
                   tick={{ fontSize: 11, fill: '#727687' }}
                 />
@@ -198,16 +213,16 @@ export default function Dashboard() {
               </div>
               <ToggleSwitch
                 state={displayedState(device)}
-                disabled={Boolean(pending[device.device_id])}
+                disabled={Boolean(pending[device.name])}
                 onClick={() => handleToggle(device)}
               />
             </div>
           ))}
-          {dashboard.loading && <p className="empty-text">Loading devices...</p>}
+          {devicesPoll.loading && deviceList.length === 0 && <p className="empty-text">Loading devices...</p>}
         </div>
       </section>
 
-      {dashboard.error && <p className="error-text">{dashboard.error}</p>}
+      {pollError && <p className="error-text">{pollError}</p>}
     </div>
   );
 }

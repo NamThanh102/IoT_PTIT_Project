@@ -24,12 +24,12 @@ Hệ thống cho phép **giám sát trực tiếp** 3 chỉ số môi trường 
 
 ### Dữ liệu cảm biến (DataSensor)
 - Bảng phân trang hiển thị toàn bộ mẫu dữ liệu đã lưu.
-- **Bộ lọc**: Sensor ID, Loại cảm biến, Giá trị, Khoảng thời gian.
+- **Bộ lọc**: Tên cảm biến (Temperature/Humidity/Light), Giá trị, Khoảng thời gian.
 - Mỗi dòng hiển thị đơn vị đúng (°C / % / lux), color-code theo loại sensor.
 
 ### Lịch sử điều khiển (ActionHistory)
 - Bảng phân trang hiển thị toàn bộ lệnh ON/OFF đã gửi.
-- **Bộ lọc**: Sensor ID, Thiết bị, Hành động, Trạng thái, Thời gian.
+- **Bộ lọc**: Thiết bị, Hành động, Trạng thái, Thời gian.
 - Trạng thái hiển thị màu: ON (xanh lá), OFF (viền xám), LOADING (xanh dương + spinner), FAILED (đỏ).
 
 ### Profile
@@ -180,7 +180,7 @@ SOURCE 000docs/scripts/schema.sql;
 SOURCE 000docs/scripts/seed.sql;
 ```
 
-Kết quả: database `iot_db` với 5 bảng `users`, `sensors`, `devices`, `datasensors`, `action`, chứa sẵn 1 user, 3 sensor, 2 device, 108 mẫu sensor và 11 lịch sử hành động.
+Kết quả: database `iot_db` với 5 bảng `users`, `sensors`, `devices`, `datasensors`, `action`, chứa sẵn 1 user, 3 sensor, 3 device (2 LED + Sensor_Node), 111 mẫu sensor và 13 lịch sử hành động.
 
 ### 7.2 Mosquitto — Khởi động MQTT Broker
 
@@ -245,8 +245,8 @@ MQTT_CLIENT_ID=iot-backend
 MQTT_ROOM=room1
 ACTION_TIMEOUT_MS=5000
 
-SENSOR_NODE_DEVICE_ID=1
-DEFAULT_USER_ID=1
+SENSOR_NODE_DEVICE_ID=sensornode
+DEFAULT_USER_ID=usrnamthan
 ```
 
 > **Lưu ý:** `.env` nằm trong `.gitignore` và **không được push lên GitHub**.
@@ -291,7 +291,7 @@ curl http://localhost:3000/api/dashboard
 # Điều khiển LED (bật LED 1)
 curl -X POST http://localhost:3000/api/device/action \
   -H "Content-Type: application/json" \
-  -d '{"device_id":"LED_01","action":"ON"}'
+  -d '{"device_id":"LED_1","action":"ON"}'
 ```
 
 ---
@@ -331,7 +331,6 @@ Trả về kết hợp: giá trị mới nhất + N mẫu gần nhất (cho bi�
   "message": "Lay dashboard thanh cong",
   "data": {
     "latest": {
-      "id": 324,
       "temperature": 29.5,
       "humidity": 58.8,
       "light": 2700,
@@ -347,16 +346,16 @@ Trả về kết hợp: giá trị mới nhất + N mẫu gần nhất (cho bi�
     ],
     "devices": [
       {
-        "device_id": "LED_01",
-        "name": "LED 1",
+        "device_id": "LED_1",
+        "name": "LED_1",
         "state": "ON",
         "last_action": "ON",
         "last_status": "ON",
         "updated_at": "2026-09-14 09:05:00"
       },
       {
-        "device_id": "LED_02",
-        "name": "LED 2",
+        "device_id": "LED_2",
+        "name": "LED_2",
         "state": "OFF",
         "last_action": "OFF",
         "last_status": "OFF",
@@ -384,11 +383,12 @@ GET /api/data/latest
 ```json
 {
   "status": "success",
-  "data": [
-    { "code": "TEMP", "name": "Temperature", "value": 29.5, "time": "2026-09-14 09:50:00" },
-    { "code": "HUMI", "name": "Humidity",    "value": 58.8, "time": "2026-09-14 09:50:00" },
-    { "code": "LIGHT","name": "Light",       "value": 2700, "time": "2026-09-14 09:50:00" }
-  ]
+  "data": {
+    "time": "2026-09-14 09:50:00",
+    "temperature": 29.5,
+    "humidity": 58.8,
+    "light": 2700
+  }
 }
 ```
 
@@ -401,15 +401,14 @@ GET /api/data/chart?limit=30
 #### Lấy toàn bộ dữ liệu (phân trang + lọc)
 
 ```
-GET /api/data/getall?page=1&limit=10&sensorId=TEMP_A3F8B2C1&type=TEMP&time=2026-09
+GET /api/data/getall?page=1&limit=10&name=Temperature&time=2026-09
 ```
 
 | Param | Kiểu | Mô tả |
 |-------|------|-------|
 | `page` | number | Trang hiện tại (mặc định 1) |
 | `limit` | number | Số dòng/trang (1-100, mặc định 10) |
-| `sensorId` | string | Lọc theo sensor UID (VD: `TEMP_A3F8B2C1`) |
-| `type` | string | `TEMP`, `HUMI`, hoặc `LIGHT` |
+| `name` | string | Lọc theo tên cảm biến: `Temperature`, `Humidity`, `Light` |
 | `value` | string | Lọc chính xác giá trị |
 | `time` | string | Khoảng thời gian linh hoạt (VD: `2026-09-14 09`) |
 
@@ -418,18 +417,17 @@ GET /api/data/getall?page=1&limit=10&sensorId=TEMP_A3F8B2C1&type=TEMP&time=2026-
   "status": "success",
   "data": [
     {
-      "id": 324,
-      "sensorID": "TEMP_A3F8B2C1",
+      "id": "dvfxhxilib",
+      "sensorID": "qvaq0snp5m",
       "name": "Temperature",
-      "sensorCode": "TEMP",
       "value": 29.5,
       "time": "2026-09-14 09:50:00"
     }
   ],
   "pagination": {
     "current_page": 1,
-    "total_pages": 11,
-    "total_records": 108
+    "total_pages": 12,
+    "total_records": 111
   }
 }
 ```
@@ -448,8 +446,8 @@ GET /api/device/status
 {
   "status": "success",
   "data": [
-    { "device_id": "LED_01", "name": "LED 1", "state": "ON",  "last_action": "ON",  "updated_at": "2026-09-14 09:05:00" },
-    { "device_id": "LED_02", "name": "LED 2", "state": "OFF", "last_action": "OFF", "updated_at": "2026-09-14 09:15:00" }
+    { "device_id": "LED_1", "name": "LED_1", "state": "ON",  "last_action": "ON",  "updated_at": "2026-09-14 09:05:00" },
+    { "device_id": "LED_2", "name": "LED_2", "state": "OFF", "last_action": "OFF", "updated_at": "2026-09-14 09:15:00" }
   ]
 }
 ```
@@ -463,14 +461,14 @@ POST /api/device/action
 Body:
 ```json
 {
-  "device_id": "LED_01",
+  "device_id": "LED_1",
   "action": "ON"
 }
 ```
 
 | Field | Kiểu | Giá trị |
 |-------|------|---------|
-| `device_id` | string | `LED_01` hoặc `LED_02` |
+| `device_id` | string | `LED_1` hoặc `LED_2` |
 | `action` | string | `ON` hoặc `OFF` |
 
 Trả về (HTTP 202 Accepted):
@@ -479,8 +477,8 @@ Trả về (HTTP 202 Accepted):
   "status": "success",
   "message": "Lenh dang duoc xu ly",
   "data": {
-    "action_id": 325,
-    "device_id": "LED_01",
+    "action_id": "fdhnyr0vrh",
+    "device_id": "LED_1",
     "requested_action": "ON",
     "current_status": "loading"
   }
@@ -494,7 +492,7 @@ Trạng thái thiết bị sẽ tự cập nhật qua polling: `loading` → `ON
 ### 8.5 Lịch sử hành động
 
 ```
-GET /api/device/history?page=1&limit=10&status=ON&deviceId=LED_01&time=2026-09-14
+GET /api/device/history?page=1&limit=10&status=ON&deviceId=LED_1&time=2026-09-14
 ```
 
 | Param | Kiểu | Giá trị |
@@ -502,7 +500,7 @@ GET /api/device/history?page=1&limit=10&status=ON&deviceId=LED_01&time=2026-09-1
 | `page` | number | Trang hiện tại |
 | `limit` | number | Số dòng/trang |
 | `status` | string | `ALL`, `ON`, `OFF`, `LOADING`, `FAILED` |
-| `deviceId` | string | `ALL`, `LED_01`, `LED_02` |
+| `deviceId` | string | `ALL`, `LED_1`, `LED_2` |
 | `action` | string | `ALL`, `ON`, `OFF` |
 | `time` | string | Khoảng thời gian |
 
@@ -511,9 +509,10 @@ GET /api/device/history?page=1&limit=10&status=ON&deviceId=LED_01&time=2026-09-1
   "status": "success",
   "data": [
     {
-      "id": 11,
-      "device_id": "LED_01",
-      "device_name": "LED 1",
+      "id": "fdhnyr0vrh",
+      "userID": "usrnamthan",
+      "device_id": "LED_1",
+      "device_name": "LED_1",
       "action": "ON",
       "status": "ON",
       "created_at": "2026-09-14 09:05:00"
@@ -522,7 +521,7 @@ GET /api/device/history?page=1&limit=10&status=ON&deviceId=LED_01&time=2026-09-1
   "pagination": {
     "current_page": 1,
     "total_pages": 2,
-    "total_records": 11
+    "total_records": 13
   }
 }
 ```
@@ -541,10 +540,9 @@ GET /api/profile
 {
   "status": "success",
   "data": {
-    "id": 1,
+    "id": "usrnamthan",
     "name": "Nguyen Thanh Nam",
     "student_id": "B23DCCN587",
-    "class_name": "11",
     "github_link": "https://github.com/NamThanh102",
     "figma_link": "https://www.figma.com/...",
     "apidocs_link": "https://postman.com/...",
@@ -644,7 +642,7 @@ const char* mqtt_pass = "123";
 ## 11. Ghi chú
 
 - **Bảo mật:** File `.env` chứa thông tin database/MQTT đã bị `.gitignore`. Không push `.env` lên GitHub.
-- **Dữ liệu ảo:** `000docs/scripts/seed.sql` chứa 108 mẫu sensor và 11 lệnh điều khiển mẫu để demo ngay mà không cần ESP32 vật lý.
+- **Dữ liệu ảo:** `000docs/scripts/seed.sql` chứa 111 mẫu sensor và 13 lệnh điều khiển mẫu để demo ngay mà không cần ESP32 vật lý.
 - **Polling interval:** Dashboard 2s, DataSensor 3s, ActionHistory 3s. Tab bị ẩn tự暂停 để giảm tải.
 - **MQTT Timeout:** Nếu ESP32 không phản hồi trong 5s → trạng thái chuyển thành `FAILED`.
 - **Postman:** Import `000docs/iot_api.postman_collection.json` để test nhanh tất cả API.

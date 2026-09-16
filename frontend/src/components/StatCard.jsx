@@ -1,3 +1,14 @@
+/**
+ * StatCard.jsx — Thẻ số liệu cảm biến (nhiệt độ / độ ẩm / ánh sáng)
+ *
+ * Tính năng:
+ * - Màu nền là gradient trộn từ `from`→`to` theo vị trí value trong [min, max].
+ * - Nhãn mức: Yếu → Rất cao (LEVELS) dựa trên tỷ lệ value/max.
+ * - Tự chọn màu chữ tương phản với nền (luminance).
+ * - Thanh tiến trình minh hoạ tỷ lệ value/max; value không phải số → '--'.
+ *
+ * Props: icon, label, unit, value, from, to, min, max.
+ */
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);

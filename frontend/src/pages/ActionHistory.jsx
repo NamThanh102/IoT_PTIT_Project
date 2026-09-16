@@ -1,3 +1,15 @@
+/**
+ * pages/ActionHistory.jsx — Trang lịch sử tác động thiết bị (bảng + lọc 6 ô)
+ *
+ * Luồng dữ liệu:
+ * - Lọc: Device, DeviceID, Action, Status, Time → applied (deps) + page.
+ * - Nút sort (Giảm dần/Tăng dần) kết hợp được với bộ lọc; mặc định giảm dần theo time.
+ * - usePolling(getDeviceHistory(...), pollInterval, deps, cacheKey):
+ *   pollInterval = 0 khi đang lọc (không tự poll), 3000 khi không lọc;
+ *   cacheKey = fingerprint(page + filter + sort) để cache riêng từng tổ hợp.
+ * - Bảng 5 cột + StatusBadge màu theo trạng thái + Pagination + Reload.
+ * Định danh thiết bị là `name` (LED_1/LED_2); bảng action không còn sensorID.
+ */
 import { useState } from 'react';
 import Pagination from '../components/Pagination.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
@@ -6,25 +18,35 @@ import { getDeviceHistory } from '../api/index.js';
 
 const STATUS_OPTIONS = ['ALL', 'ON', 'OFF', 'LOADING', 'FAILED'];
 const ACTION_OPTIONS = ['ALL', 'ON', 'OFF'];
-const DEVICE_OPTIONS = ['ALL', 'LED_01', 'LED_02'];
 const TIME_HINT =
-  'Flexible: 2026 | 2026-08 | 2026-08-22 | 2026-08-22 10 | 2026-08-22 10:30 | 2026-08-22 10:30:45';
+  'e.g 2026-08-22 10:30:45';
 
 export default function ActionHistory() {
-  const [sensorIdInput, setSensorIdInput] = useState('');
-  const [deviceFilter, setDeviceFilter] = useState('ALL');
+  const [deviceFilter, setDeviceFilter] = useState('');
+  const [deviceIdInput, setDeviceIdInput] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
   const [timeInput, setTimeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState('desc');
 
   const [applied, setApplied] = useState({
-    sensorId: '',
-    device: 'ALL',
+    device: '',
+    deviceID: '',
     action: 'ALL',
     time: '',
     status: 'ALL',
   });
+
+  const filterActive = Boolean(
+    applied.device ||
+    applied.deviceID ||
+    applied.action !== 'ALL' ||
+    applied.time ||
+    applied.status !== 'ALL'
+  );
+  const pollInterval = filterActive ? 0 : 3000;
+  const cacheKey = `actionhistory:${page}:${JSON.stringify(applied)}:${sortOrder}`;
 
   const { data, error, loading, refetch } = usePolling(
     (signal) =>
@@ -32,24 +54,30 @@ export default function ActionHistory() {
         {
           page,
           limit: 10,
-          sensorId: applied.sensorId,
-          deviceId: applied.device !== 'ALL' ? applied.device : undefined,
+          deviceId: applied.device || undefined,
+          deviceID: applied.deviceID || undefined,
           action: applied.action !== 'ALL' ? applied.action : undefined,
           time: applied.time,
           status: applied.status,
+          sort: sortOrder,
         },
         signal
       ),
-    3000,
-    [page, applied],
-    'actionhistory'
+    pollInterval,
+    [page, applied, sortOrder, pollInterval],
+    cacheKey
   );
+
+  function toggleSort() {
+    setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    setPage(1);
+  }
 
   function applyFilter(event) {
     event.preventDefault();
     setApplied({
-      sensorId: sensorIdInput.trim(),
       device: deviceFilter,
+      deviceID: deviceIdInput.trim(),
       action: actionFilter,
       time: timeInput.trim(),
       status: statusFilter,
@@ -58,12 +86,12 @@ export default function ActionHistory() {
   }
 
   function clearFilter() {
-    setSensorIdInput('');
-    setDeviceFilter('ALL');
+    setDeviceFilter('');
+    setDeviceIdInput('');
     setActionFilter('ALL');
     setTimeInput('');
     setStatusFilter('ALL');
-    setApplied({ sensorId: '', device: 'ALL', action: 'ALL', time: '', status: 'ALL' });
+    setApplied({ device: '', deviceID: '', action: 'ALL', time: '', status: 'ALL' });
     setPage(1);
   }
 
@@ -72,26 +100,24 @@ export default function ActionHistory() {
       <section className="card">
         <form className="filter-grid-6" onSubmit={applyFilter}>
           <div className="filter-group">
-            <label className="filter-label">Sensor ID</label>
+            <label className="filter-label">DeviceID</label>
             <input
               type="text"
               className="filter-input"
-              placeholder="e.g. 1, 2, 3..."
-              value={sensorIdInput}
-              onChange={(e) => setSensorIdInput(e.target.value)}
+              placeholder="e.g. s9ykm5rcgy"
+              value={deviceIdInput}
+              onChange={(e) => setDeviceIdInput(e.target.value)}
             />
           </div>
           <div className="filter-group">
             <label className="filter-label">Device</label>
-            <select
-              className="filter-select"
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="e.g. LED"
               value={deviceFilter}
               onChange={(e) => setDeviceFilter(e.target.value)}
-            >
-              {DEVICE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
+            />
           </div>
           <div className="filter-group">
             <label className="filter-label">Action</label>
@@ -141,7 +167,16 @@ export default function ActionHistory() {
       <section className="card table-card">
         <div className="card-header">
           <h3 className="card-title">Action History</h3>
-          <button className="btn-reload" onClick={refetch}>↻ Reload</button>
+          <div className="header-actions">
+            <button
+              className="btn-reload"
+              onClick={toggleSort}
+              title="Sort by time"
+            >
+              {sortOrder === 'desc' ? '↓' : '↑'}
+            </button>
+            <button className="btn-reload" onClick={refetch}>↻ Reload</button>
+          </div>
         </div>
         {error && <p className="error-text">{error}</p>}
         {loading && !data && (
@@ -158,8 +193,8 @@ export default function ActionHistory() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>SensorID</th>
                   <th>DeviceID</th>
+                  <th>Device</th>
                   <th>Action</th>
                   <th>Status</th>
                   <th>Time</th>
@@ -169,11 +204,9 @@ export default function ActionHistory() {
                 {data.data.map((row) => (
                   <tr key={row.id}>
                     <td>
-                      <span className="sensor-code">null</span>
-                    </td>
-                    <td>
                       <span className="sensor-code">{row.device_id}</span>
                     </td>
+                    <td className="value-cell">{row.device_name}</td>
                     <td className="value-cell">{row.action}</td>
                     <td>
                       <StatusBadge status={row.status} />

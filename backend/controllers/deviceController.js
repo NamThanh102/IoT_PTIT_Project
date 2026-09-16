@@ -1,23 +1,45 @@
+/**
+ * controllers/deviceController.js — Nghiệp vụ điều khiển thiết bị (LED)
+ *
+ * Hàm export:
+ * - postAction(req)      POST /api/device/action: ghi dòng LOADING → publish MQTT → hẹn timeout
+ * - handleDeviceResponse(payload)  [MQTT] thiết bị phản hồi → chờ sang giây kế tiếp
+ *                                  rồi ghi THÊM dòng ON/OFF (giữ dòng LOADING) để đảm bảo thứ tự
+ * - getStatus(req)       GET /api/device/status
+ * - getHistory(req)      GET /api/device/history (page/limit + lọc status, action, deviceId/deviceID, time + sort)
+ * - getDeviceStatus()    trạng thái các LED điều khiển được (device_id = khóa chính 10 ký tự, name = LED_x)
+ *
+ * Luồng lệnh: LOADING (bấm nút) → ON/OFF/FAILED (phản hồi ESP32, timeout env.mqtt.actionTimeoutMs,
+ * hoặc publish MQTT fail ngay lúc gọi — vẫn ghi FAILED để không kẹt dòng LOADING).
+ * LED_NAME_TO_KEY map tên thiết bị → key topic MQTT (LED_1→led1, LED_2→led2);
+ * `name` (LED_1/LED_2) là định danh thiết bị, không còn cột code.
+ */
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { Action } from '../models/Action.js';
 import { Device } from '../models/Device.js';
-import { buildInsert, buildSelect, buildUpdate, tableName } from '../utils/queryBuilder.js';
+import { buildInsert, buildSelect, tableName } from '../utils/queryBuilder.js';
+import { newId } from '../utils/id.js';
 import { publishDeviceControl } from '../config/mqtt.js';
 import { ok } from '../utils/response.js';
 import { badRequest } from '../utils/ApiError.js';
 import { parseFlexibleTime } from '../utils/timeRange.js';
 
-const DEVICE_KEY_TO_CODE = {
-  led1: 'LED_01',
-  led2: 'LED_02',
+const LED_NAME_TO_KEY = {
+  LED_1: 'led1',
+  LED_2: 'led2',
 };
 
-const CODE_TO_KEY = Object.fromEntries(
-  Object.entries(DEVICE_KEY_TO_CODE).map(([key, code]) => [code, key])
+const KEY_TO_LED_NAME = Object.fromEntries(
+  Object.entries(LED_NAME_TO_KEY).map(([name, key]) => [key, name])
 );
 
 const pendingTimers = new Map();
+
+function sleepUntilNextSecond(bufferMs = 50) {
+  const delay = 1000 - (Date.now() % 1000) + bufferMs;
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
 
 function clearPendingTimer(deviceId) {
   const pending = pendingTimers.get(deviceId);
@@ -35,38 +57,48 @@ function normalizeState(status, action) {
 
 async function listDevices() {
   const { sql, params } = buildSelect(Device, {
-    columns: ['id', 'code', 'name'],
-    order: 'id ASC',
+    columns: ['id', 'name'],
+    order: 'name ASC',
   });
   const [rows] = await pool.query(sql, params);
   return rows;
 }
 
-async function findDeviceByCode(code) {
+async function findDeviceByName(name) {
   const { sql, params } = buildSelect(Device, {
-    columns: ['id', 'code', 'name'],
-    where: [{ sql: 'code = ?', params: [code] }],
+    columns: ['id', 'name'],
+    where: [{ sql: 'name = ?', params: [name] }],
     limit: 1,
   });
   const [rows] = await pool.query(sql, params);
   return rows.length > 0 ? rows[0] : null;
 }
 
+async function findDevicesByNamePart(namePart) {
+  const { sql, params } = buildSelect(Device, {
+    columns: ['id'],
+    where: [{ sql: 'name LIKE ?', params: [`%${namePart}%`] }],
+  });
+  const [rows] = await pool.query(sql, params);
+  return rows.map((row) => row.id);
+}
+
 async function insertAction({ deviceId, action, status }) {
+  const id = newId();
   const { sql, params } = buildInsert(
     Action,
-    { deviceID: deviceId, action, status },
+    { id, userID: env.defaultUserId, deviceID: deviceId, action, status },
     { created_at: 'NOW()' }
   );
-  const [result] = await pool.execute(sql, params);
-  return result.insertId;
+  await pool.execute(sql, params);
+  return id;
 }
 
 async function findLatestLoadingAction(deviceId) {
   const { sql, params } = buildSelect(Action, {
     columns: ['id', 'action'],
     where: [{ sql: 'deviceID = ?', params: [deviceId] }, { sql: "status = 'loading'" }],
-    order: 'id DESC',
+    order: 'created_at DESC, id DESC',
     limit: 1,
   });
   const [rows] = await pool.query(sql, params);
@@ -78,15 +110,17 @@ async function findLatestActionPerDevice() {
     SELECT a.id, a.action, a.status, a.created_at, a.deviceID AS deviceId
     FROM ${tableName('action')} a
     JOIN (
-      SELECT MAX(id) AS maxId
+      SELECT deviceID, MAX(created_at) AS maxCreated
       FROM ${tableName('action')}
+      WHERE LOWER(status) <> 'loading'
       GROUP BY deviceID
-    ) latest ON latest.maxId = a.id`;
+    ) latest ON latest.deviceID = a.deviceID AND latest.maxCreated = a.created_at
+    WHERE LOWER(a.status) <> 'loading'`;
   const [rows] = await pool.query(sql);
   return rows;
 }
 
-function buildHistoryConditions({ status, timeRange, deviceId, action }) {
+function buildHistoryConditions({ status, timeRange, deviceIds, deviceID, action }) {
   const where = [];
   if (status && status !== 'ALL') {
     where.push({ sql: 'LOWER(a.status) = ?', params: [String(status).toLowerCase()] });
@@ -94,8 +128,18 @@ function buildHistoryConditions({ status, timeRange, deviceId, action }) {
   if (timeRange) {
     where.push({ sql: 'a.created_at >= ? AND a.created_at <= ?', params: [timeRange.start, timeRange.end] });
   }
-  if (deviceId) {
-    where.push({ sql: 'a.deviceID = ?', params: [Number(deviceId)] });
+  if (deviceIds) {
+    if (deviceIds.length === 0) {
+      where.push({ sql: '1 = 0' });
+    } else {
+      where.push({
+        sql: `a.deviceID IN (${deviceIds.map(() => '?').join(', ')})`,
+        params: deviceIds,
+      });
+    }
+  }
+  if (deviceID) {
+    where.push({ sql: 'a.deviceID = ?', params: [deviceID] });
   }
   if (action && action !== 'ALL') {
     where.push({ sql: 'a.action = ?', params: [action] });
@@ -103,13 +147,13 @@ function buildHistoryConditions({ status, timeRange, deviceId, action }) {
   return where;
 }
 
-async function findHistory({ limit, offset }, filters) {
+async function findHistory({ limit, offset }, filters, sortDir) {
   const { sql, params } = buildSelect(Action, {
-    columns: 'a.id, d.code AS device_id, d.name AS device_name, a.action, UPPER(a.status) AS status, a.created_at',
+    columns: 'a.id, a.userID, a.deviceID AS device_id, d.name AS device_name, a.action, UPPER(a.status) AS status, a.created_at',
     alias: 'a',
     joins: `JOIN ${tableName('devices')} d ON d.id = a.deviceID`,
     where: buildHistoryConditions(filters),
-    order: 'a.id DESC',
+    order: sortDir === 'asc' ? 'a.created_at ASC, a.id ASC' : 'a.created_at DESC, a.id DESC',
     limit,
     offset,
   });
@@ -127,18 +171,18 @@ async function countHistory(filters) {
   return Number(rows[0].total);
 }
 
-export async function getDeviceStatus() {
+async function getDeviceStatus() {
   const devices = await listDevices();
   const latestByDevice = new Map();
   for (const row of await findLatestActionPerDevice()) {
     latestByDevice.set(row.deviceId, row);
   }
   return devices
-    .filter((device) => CODE_TO_KEY[device.code])
+    .filter((device) => LED_NAME_TO_KEY[device.name])
     .map((device) => {
       const latest = latestByDevice.get(device.id);
       return {
-        device_id: device.code,
+        device_id: device.id,
         name: device.name,
         state: latest ? normalizeState(latest.status, latest.action) : 'OFF',
         last_action: latest ? latest.action : null,
@@ -157,13 +201,13 @@ async function sendAction({ deviceId, action }) {
     throw badRequest('action chi nhan ON hoac OFF');
   }
 
-  const device = await findDeviceByCode(String(deviceId).trim().toUpperCase());
+  const device = await findDeviceByName(String(deviceId).trim().toUpperCase());
   if (!device) {
     throw badRequest(`Khong tim thay thiet bi ${deviceId}`);
   }
-  const ledKey = CODE_TO_KEY[device.code];
+  const ledKey = LED_NAME_TO_KEY[device.name];
   if (!ledKey) {
-    throw badRequest(`Thiet bi ${device.code} khong dieu khien duoc qua MQTT`);
+    throw badRequest(`Thiet bi ${device.name} khong dieu khien duoc qua MQTT`);
   }
 
   clearPendingTimer(device.id);
@@ -174,10 +218,23 @@ async function sendAction({ deviceId, action }) {
     status: 'loading',
   });
 
-  publishDeviceControl({
-    room_id: env.mqtt.room,
-    [ledKey]: normalizedAction.toLowerCase(),
-  });
+  try {
+    publishDeviceControl({
+      room_id: env.mqtt.room,
+      [ledKey]: normalizedAction.toLowerCase(),
+    });
+  } catch (error) {
+    clearPendingTimer(device.id);
+    const failedId = await insertAction({
+      deviceId: device.id,
+      action: normalizedAction,
+      status: 'failed',
+    });
+    if (failedId) {
+      console.log(`[device.pubFailed] ${device.name} -> FAILED (completion #${failedId})`);
+    }
+    throw badRequest(`Gui lenh MQTT that bai: ${error.message}`);
+  }
 
   const timer = setTimeout(async () => {
     try {
@@ -190,7 +247,7 @@ async function sendAction({ deviceId, action }) {
       });
       if (failedId) {
         clearPendingTimer(device.id);
-        console.log(`[device.timeout] ${device.code} -> FAILED (completion #${failedId})`);
+        console.log(`[device.timeout] ${device.name} -> FAILED (completion #${failedId})`);
       }
     } catch (error) {
       console.error('[device] timeout insert failed:', error.message);
@@ -201,19 +258,21 @@ async function sendAction({ deviceId, action }) {
 
   return {
     action_id: actionId,
-    device_id: device.code,
+    device_id: device.name,
     requested_action: normalizedAction,
     current_status: 'loading',
   };
 }
 
 export async function handleDeviceResponse(payload) {
-  const entries = Object.entries(payload || {}).filter(([key]) => DEVICE_KEY_TO_CODE[key]);
+  const entries = Object.entries(payload || {}).filter(([key]) => KEY_TO_LED_NAME[key]);
   if (entries.length === 0) return;
 
+  await sleepUntilNextSecond();
+
   for (const [key, value] of entries) {
-    const code = DEVICE_KEY_TO_CODE[key];
-    const device = await findDeviceByCode(code);
+    const name = KEY_TO_LED_NAME[key];
+    const device = await findDeviceByName(name);
     if (!device) continue;
 
     const state = String(value).trim().toUpperCase();
@@ -227,14 +286,14 @@ export async function handleDeviceResponse(payload) {
     });
     if (completionId) {
       clearPendingTimer(device.id);
-      console.log(`[device.response] ${code} -> ${state} (completion #${completionId})`);
+      console.log(`[device.response] ${name} -> ${state} (completion #${completionId})`);
     }
   }
 }
 
-async function queryHistory({ limit, offset }, filters) {
+async function queryHistory({ limit, offset }, filters, sortDir) {
   const [rows, total] = await Promise.all([
-    findHistory({ limit, offset }, filters),
+    findHistory({ limit, offset }, filters, sortDir),
     countHistory(filters),
   ]);
   return { rows, total };
@@ -287,17 +346,18 @@ export async function getHistory(req, res, next) {
       throw badRequest('action must be ON or OFF');
     }
 
-    let resolvedDeviceId = null;
+    let deviceIds = null;
     if (req.query.deviceId) {
-      const device = await findDeviceByCode(String(req.query.deviceId).trim().toUpperCase());
-      if (!device) {
-        throw badRequest(`Device ${req.query.deviceId} not found`);
-      }
-      resolvedDeviceId = device.id;
+      deviceIds = await findDevicesByNamePart(String(req.query.deviceId).trim());
     }
 
-    const filters = { status, timeRange, deviceId: resolvedDeviceId, action: actionFilter };
-    const { rows, total } = await queryHistory({ limit, offset }, filters);
+    const resolvedDeviceID = req.query.deviceID
+      ? String(req.query.deviceID).trim()
+      : null;
+    const sortDir = String(req.query.sort || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const filters = { status, timeRange, deviceIds, deviceID: resolvedDeviceID, action: actionFilter };
+    const { rows, total } = await queryHistory({ limit, offset }, filters, sortDir);
 
     return ok(res, {
       data: rows,

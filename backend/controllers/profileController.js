@@ -1,3 +1,10 @@
+/**
+ * controllers/profileController.js — Nghiệp vụ hồ sơ người dùng
+ *
+ * Hàm export:
+ * - getProfile(req)  GET /api/profile: đọc users theo defaultUserId,
+ *   trả thông tin cá nhân + 4 link tài liệu (github/figma/apidocs/baocao).
+ */
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';

@@ -1,3 +1,18 @@
+/**
+ * config/mqtt.js — Wrapper MQTT client (kênh giao tiếp với ESP32)
+ *
+ * Tính năng:
+ * - connectMqtt(handlers): kết nối broker, SUB topic sensor_data + device_response
+ * - message → parse JSON (sai định dạng thì bỏ qua, chỉ log) → gọi handler:
+ *     sensorData   → saveSensorSample (ghi mẫu cảm biến vào DB)
+ *     deviceResponse → handleDeviceResponse (ghi kết quả lệnh bật/tắt)
+ * - Tự reconnect mỗi 3s khi broker tắt, không crash backend
+ * - publishDeviceControl(payload): PUB topic device_control (gửi lệnh tới ESP32)
+ *
+ * Luồng: ESP32 --sensor_data--> saveSensorSample
+ *        ESP32 --device_response--> handleDeviceResponse
+ *        backend --device_control--> ESP32
+ */
 import mqtt from 'mqtt';
 import { env } from './env.js';
 

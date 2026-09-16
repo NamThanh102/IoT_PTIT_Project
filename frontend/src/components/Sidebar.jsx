@@ -1,3 +1,10 @@
+/**
+ * Sidebar.jsx — Menu điều hướng trái
+ *
+ * - NAV_ITEMS: danh sách 4 trang (Dashboard, DataSensor, Action History, Profile).
+ * - NavLink tự đánh dấu .active theo đường dẫn hiện tại.
+ * - Đầu sidebar là brand "Smart Room", cuối là chân trang MSSV (prop msv từ /api/profile).
+ */
 import { NavLink } from 'react-router-dom';
 import { DashboardIcon, SensorIcon, HistoryIcon, UserIcon } from './Icons.jsx';
 
@@ -8,7 +15,7 @@ const NAV_ITEMS = [
   { to: '/profile', label: 'Profile', icon: UserIcon },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ msv = 'B23DCCN587' }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -34,7 +41,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="sidebar-footer">PTIT - B23DCCN587</div>
+      <div className="sidebar-footer">PTIT - {msv}</div>
     </aside>
   );
 }

@@ -1,3 +1,13 @@
+/**
+ * utils/queryBuilder.js — Sinh SQL tham số hóa an toàn (chống SQL injection)
+ *
+ * Hàm export:
+ * - tableName(key)      lấy tên bảng theo key đăng ký trong TABLES
+ * - buildInsert(model, data, raw)  INSERT chỉ các cột có giá trị; raw = SQL thô (vd NOW())
+ * - buildSelect(model, opts)       SELECT với where/joins/group/order/limit/offset
+ *
+ * Mọi controller dùng chung để tránh lặp cú pháp SQL và rò rỉ tham số.
+ */
 import { User } from '../models/User.js';
 import { Sensor } from '../models/Sensor.js';
 import { Device } from '../models/Device.js';
@@ -25,7 +35,6 @@ export function buildInsert(model, data, raw = {}) {
   const placeholders = [];
   const params = [];
   for (const column of model.columns) {
-    if (column === model.primaryKey) continue;
     if (Object.prototype.hasOwnProperty.call(raw, column)) {
       columns.push(column);
       placeholders.push(raw[column]);
@@ -38,26 +47,6 @@ export function buildInsert(model, data, raw = {}) {
     }
   }
   const sql = `INSERT INTO ${model.table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-  return { sql, params };
-}
-
-export function buildUpdate(model, data, where = [], raw = {}) {
-  const setClauses = [];
-  const params = [];
-  for (const column of model.columns) {
-    if (column === model.primaryKey) continue;
-    if (Object.prototype.hasOwnProperty.call(raw, column)) {
-      setClauses.push(`${column} = ${raw[column]}`);
-      continue;
-    }
-    if (data[column] !== undefined && data[column] !== null) {
-      setClauses.push(`${column} = ?`);
-      params.push(data[column]);
-    }
-  }
-  const whereClauses = where.map((w) => w.sql).join(' AND ');
-  for (const w of where) params.push(...(w.params || []));
-  const sql = `UPDATE ${model.table} SET ${setClauses.join(', ')}${whereClauses ? ` WHERE ${whereClauses}` : ''}`;
   return { sql, params };
 }
 

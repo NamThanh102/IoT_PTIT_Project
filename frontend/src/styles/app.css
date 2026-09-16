@@ -14,8 +14,6 @@ body,
   width: 264px;
   flex-shrink: 0;
   background: linear-gradient(180deg, #f0f5ff, #f6f9ff);
-  /* border-right: 1px solid var(--divider); */
-  /* background: #F8FAFC; */
   border-right: 1px solid #E2E8F0;
   display: flex;
   flex-direction: column;
@@ -106,8 +104,6 @@ body,
 
 .header {
   height: 72px;
-  /* background: linear-gradient(90deg, #f0f5ff, #fafbff);
-  border-bottom: 1px solid var(--divider); */
   background: #FFFFFF;
   border-bottom: 1px solid #E2E8F0;
   display: flex;
@@ -420,15 +416,11 @@ body,
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s ease;
-  /* Đã xóa margin-left: auto; để nút mặc định nằm bên trái */
 }
 
-/* Thêm css cho trạng thái ON: dịch chuyển nút tròn sang phải 24px */
 .toggle.on .toggle-knob {
   transform: translateX(24px);
 }
-
-/* XÓA HOÀN TOÀN khối .toggle:not(.on) .toggle-knob cũ */
 
 .toggle-spinner,
 .badge-spinner {
@@ -522,13 +514,6 @@ body,
   align-items: end;
 }
 
-.filter-grid-5 {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  align-items: end;
-}
-
 .filter-grid-6 {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -558,6 +543,12 @@ body,
   border-radius: var(--radius-sm);
   font-weight: 600;
   display: inline-flex;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
   align-items: center;
 }
 
@@ -975,10 +966,6 @@ body,
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .filter-grid-5 {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
   .filter-grid-6 {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -1002,10 +989,6 @@ body,
 
 @media (max-width: 640px) {
   .filter-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .filter-grid-5 {
     grid-template-columns: 1fr;
   }
 

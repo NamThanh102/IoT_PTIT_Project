@@ -1,3 +1,10 @@
+/**
+ * Icons.jsx — Bộ icon SVG inline dùng chung toàn app
+ *
+ * Icon điều hướng (size mặc định 18): DashboardIcon, SensorIcon, HistoryIcon, UserIcon
+ * Icon số liệu (size mặc định 22): TempIcon, HumiIcon, LightIcon
+ * Tất cả kế thừa màu currentColor (dùng cho CSS color hiện tại).
+ */
 export function DashboardIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
