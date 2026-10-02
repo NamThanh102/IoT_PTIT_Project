@@ -45,6 +45,7 @@ export default function Dashboard() {
   const latestPoll = usePolling(getDataLatest, 2000, [], 'dashboard:latest');
   const chartPoll = usePolling((signal) => getDataChart(30, signal), 2000, [], 'dashboard:chart');
   const devicesPoll = usePolling(getDeviceStatus, 2000, [], 'dashboard:devices');
+
   const [pending, setPending] = useState({});
   const [toast, setToast] = useState(null);
   const pendingStartRef = useRef({});
@@ -121,31 +122,32 @@ export default function Dashboard() {
   return (
     <div className="page">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-
+      {/* 3 thẻ stat */}
       <section className="stat-grid">
         <StatCard
           icon={<TempIcon />}
-          from="#fecaca" to="#991b1b" min={0} max={50}
+          from="#fc9797" to="#991b1b" min={0} max={50}
           label="Temperature"
           unit="°C"
           value={latest ? latest.temperature : null}
         />
         <StatCard
           icon={<HumiIcon />}
-          from="#bae6fd" to="#0369a1" min={0} max={100}
+          from="#bae6fd" to="#024264" min={0} max={100}
           label="Humidity"
           unit="%"
           value={latest ? latest.humidity : null}
         />
         <StatCard
           icon={<LightIcon />}
-          from="#fef9c3" to="#a6ff00" min={0} max={1500}
+          from="#f0ebbc" to="#54fa62" min={0} max={1500}
           label="Light"
           unit="lux"
           value={latest ? latest.light : null}
         />
       </section>
 
+      {/* Chart */}
       <section className="card chart-card">
         <div className="card-header">
           <h2 className="card-title">Realtime Sensor Data</h2>
@@ -196,6 +198,7 @@ export default function Dashboard() {
         )}
       </section>
 
+        {/* device-control */}
       <section className="device-section">
         <h2 className="section-title">Device Control</h2>
         <div className="device-grid">

@@ -22,9 +22,11 @@ export function usePolling(fetcher, intervalMs = 2000, deps = [], cacheKey = nul
   const cacheKeyRef = useRef(cacheKey);
   cacheKeyRef.current = cacheKey;
   const cached = cacheKey ? cache.get(cacheKey) : null;
+
   const [data, setData] = useState(cached || null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(!cached);
+  
   const runningRef = useRef(false);
   const timerRef = useRef(null);
   const controllerRef = useRef(null);

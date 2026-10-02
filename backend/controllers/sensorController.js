@@ -81,7 +81,7 @@ function buildDataConditions({ timeRange, sensorName, sensorId, value }) {
     where.push({ sql: 'd.sensorID = ?', params: [sensorId] });
   }
   if (value !== undefined && value !== null) {
-    where.push({ sql: 'd.value = ?', params: [value] });
+    where.push({ sql: 'ROUND(d.value, 1) = ROUND(?, 1)', params: [value] });
   }
   return where;
 }
@@ -135,7 +135,7 @@ function resolveFilters({ time, name, value, sensorId }) {
   if (sensorId) {
     filters.sensorId = String(sensorId).trim();
   }
-  if (value) {
+  if (value !== undefined && value !== null && String(value).trim() !== '') {
     const num = Number(value);
     if (!Number.isFinite(num)) {
       throw badRequest('value must be a number');

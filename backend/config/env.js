@@ -10,7 +10,12 @@
  * - mqtt: url broker, username/password, room, timeout lệnh, các topic
  * - defaultUserId: user mặc định cho /api/profile và cột userID trong action
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 function toNumber(value, fallback) {
   const parsed = Number(value);

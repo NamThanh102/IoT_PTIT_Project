@@ -1,13 +1,15 @@
 /**
- * pages/ActionHistory.jsx — Trang lịch sử tác động thiết bị (bảng + lọc 6 ô)
+ * pages/ActionHistory.jsx — Trang lịch sử tác động thiết bị (bảng + lọc)
  *
  * Luồng dữ liệu:
- * - Lọc: Device, DeviceID, Action, Status, Time → applied (deps) + page.
+ * - Lọc: Device (dropdown LED_1/LED_2), Action, Status, Time → applied (deps) + page.
+ * - Số dòng mỗi trang (Rows/page, ô nhập số bất kỳ, mặc định 10) → đổi limit tự về page 1.
+ * - Dòng nằm trong table-footer (kèm Total + Pagination) vì thuộc phân trang, KHÔNG phải bộ lọc.
  * - Nút sort (Giảm dần/Tăng dần) kết hợp được với bộ lọc; mặc định giảm dần theo time.
  * - usePolling(getDeviceHistory(...), pollInterval, deps, cacheKey):
  *   pollInterval = 0 khi đang lọc (không tự poll), 3000 khi không lọc;
- *   cacheKey = fingerprint(page + filter + sort) để cache riêng từng tổ hợp.
- * - Bảng 5 cột + StatusBadge màu theo trạng thái + Pagination + Reload.
+ *   cacheKey = fingerprint(page + limit + filter + sort) để cache riêng từng tổ hợp.
+ * - Bảng 6 cột + StatusBadge màu theo trạng thái + Pagination + Reload.
  * Định danh thiết bị là `name` (LED_1/LED_2); bảng action không còn sensorID.
  */
 import { useState } from 'react';
@@ -18,44 +20,43 @@ import { getDeviceHistory } from '../api/index.js';
 
 const STATUS_OPTIONS = ['ALL', 'ON', 'OFF', 'LOADING', 'FAILED'];
 const ACTION_OPTIONS = ['ALL', 'ON', 'OFF'];
+const DEVICE_OPTIONS = ['ALL', 'LED_1', 'LED_2'];
 const TIME_HINT =
   'e.g 2026-08-22 10:30:45';
 
 export default function ActionHistory() {
-  const [deviceFilter, setDeviceFilter] = useState('');
-  const [deviceIdInput, setDeviceIdInput] = useState('');
+  const [deviceFilter, setDeviceFilter] = useState('ALL');
   const [actionFilter, setActionFilter] = useState('ALL');
-  const [timeInput, setTimeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [timeInput, setTimeInput] = useState('');
+  const [limit, setLimit] = useState(10);
+  const [limitInput, setLimitInput] = useState('10');
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState('desc');
 
   const [applied, setApplied] = useState({
-    device: '',
-    deviceID: '',
+    device: 'ALL',
     action: 'ALL',
     time: '',
     status: 'ALL',
   });
 
   const filterActive = Boolean(
-    applied.device ||
-    applied.deviceID ||
+    applied.device !== 'ALL' ||
     applied.action !== 'ALL' ||
     applied.time ||
     applied.status !== 'ALL'
   );
   const pollInterval = filterActive ? 0 : 3000;
-  const cacheKey = `actionhistory:${page}:${JSON.stringify(applied)}:${sortOrder}`;
+  const cacheKey = `actionhistory:${page}:${limit}:${JSON.stringify(applied)}:${sortOrder}`;
 
   const { data, error, loading, refetch } = usePolling(
     (signal) =>
       getDeviceHistory(
         {
           page,
-          limit: 10,
-          deviceId: applied.device || undefined,
-          deviceID: applied.deviceID || undefined,
+          limit,
+          deviceId: applied.device !== 'ALL' ? applied.device : undefined,
           action: applied.action !== 'ALL' ? applied.action : undefined,
           time: applied.time,
           status: applied.status,
@@ -64,7 +65,7 @@ export default function ActionHistory() {
         signal
       ),
     pollInterval,
-    [page, applied, sortOrder, pollInterval],
+    [page, limit, applied, sortOrder, pollInterval],
     cacheKey
   );
 
@@ -77,7 +78,6 @@ export default function ActionHistory() {
     event.preventDefault();
     setApplied({
       device: deviceFilter,
-      deviceID: deviceIdInput.trim(),
       action: actionFilter,
       time: timeInput.trim(),
       status: statusFilter,
@@ -85,39 +85,46 @@ export default function ActionHistory() {
     setPage(1);
   }
 
+  function changeLimit(nextLimit) {
+    setLimit(nextLimit);
+    setPage(1);
+  }
+
+  function commitLimit() {
+    const n = Math.floor(Number(limitInput));
+    if (Number.isFinite(n) && n >= 1) {
+      changeLimit(n);
+      setLimitInput(String(n));
+    } else {
+      setLimitInput(String(limit));
+    }
+  }
+
   function clearFilter() {
-    setDeviceFilter('');
-    setDeviceIdInput('');
+    setDeviceFilter('ALL');
     setActionFilter('ALL');
     setTimeInput('');
     setStatusFilter('ALL');
-    setApplied({ device: '', deviceID: '', action: 'ALL', time: '', status: 'ALL' });
+    setApplied({ device: 'ALL', action: 'ALL', time: '', status: 'ALL' });
     setPage(1);
   }
 
   return (
     <div className="page">
+      {/* filter */}
       <section className="card">
-        <form className="filter-grid-6" onSubmit={applyFilter}>
-          <div className="filter-group">
-            <label className="filter-label">DeviceID</label>
-            <input
-              type="text"
-              className="filter-input"
-              placeholder="e.g. s9ykm5rcgy"
-              value={deviceIdInput}
-              onChange={(e) => setDeviceIdInput(e.target.value)}
-            />
-          </div>
+<form className="filter-grid-6" onSubmit={applyFilter}>
           <div className="filter-group">
             <label className="filter-label">Device</label>
-            <input
-              type="text"
-              className="filter-input"
-              placeholder="e.g. LED"
+            <select
+              className="filter-select"
               value={deviceFilter}
               onChange={(e) => setDeviceFilter(e.target.value)}
-            />
+            >
+              {DEVICE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </div>
           <div className="filter-group">
             <label className="filter-label">Action</label>
@@ -163,7 +170,7 @@ export default function ActionHistory() {
           </div>
         </form>
       </section>
-
+      {/* table */}
       <section className="card table-card">
         <div className="card-header">
           <h3 className="card-title">Action History</h3>
@@ -195,6 +202,7 @@ export default function ActionHistory() {
                 <tr>
                   <th>DeviceID</th>
                   <th>Device</th>
+                  <th>User</th>
                   <th>Action</th>
                   <th>Status</th>
                   <th>Time</th>
@@ -207,6 +215,7 @@ export default function ActionHistory() {
                       <span className="sensor-code">{row.device_id}</span>
                     </td>
                     <td className="value-cell">{row.device_name}</td>
+                    <td className="value-cell">{row.userID}</td>
                     <td className="value-cell">{row.action}</td>
                     <td>
                       <StatusBadge status={row.status} />
@@ -218,6 +227,18 @@ export default function ActionHistory() {
             </table>
             <div className="table-footer">
               <span className="total-text">Total: {data.pagination.total_records} records</span>
+              <div className="rows-page">
+                <label className="rows-page-label" htmlFor="rows-per-page">Rows/page</label>
+                <input
+                  id="rows-per-page"
+                  type="text"
+                  className="rows-page-input"
+                  value={limitInput}
+                  onChange={(e) => setLimitInput(e.target.value)}
+                  onBlur={commitLimit}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitLimit(); } }}
+                />
+              </div>
               <Pagination
                 pagination={data.pagination}
                 onPageChange={(nextPage) => setPage(nextPage)}
