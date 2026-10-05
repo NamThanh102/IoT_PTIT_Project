@@ -3,7 +3,7 @@
  *
  * - NAV_ITEMS: danh sách 4 trang (Dashboard, DataSensor, Action History, Profile).
  * - NavLink tự đánh dấu .active theo đường dẫn hiện tại.
- * - Đầu sidebar là brand "Smart Room", cuối là chân trang MSSV (prop msv từ /api/profile).
+ * - Đầu sidebar là brand "IoT System", cuối là chân trang MSSV (prop msv từ /api/profile).
  */
 import { NavLink } from 'react-router-dom';
 import { DashboardIcon, SensorIcon, HistoryIcon, UserIcon } from './Icons.jsx';
@@ -21,7 +21,7 @@ export default function Sidebar({ msv = 'B23DCCN587' }) {
       <div className="sidebar-brand">
         <div className="sidebar-brand-logo">IoT</div>
         <div>
-          <div className="sidebar-brand-title">Smart Room</div>
+          <div className="sidebar-brand-title">IoT System</div>
           <div className="sidebar-brand-subtitle">Monitoring System</div>
         </div>
       </div>

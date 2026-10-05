@@ -24,6 +24,11 @@ const DEVICE_OPTIONS = ['ALL', 'LED_1', 'LED_2'];
 const TIME_HINT =
   'e.g 2026-08-22 10:30:45';
 
+/**
+ * Component ActionHistory: Trang hiển thị lịch sử tác động/điều khiển thiết bị.
+ * Hỗ trợ lọc theo thiết bị, hành động, trạng thái, khoảng thời gian, có sắp xếp và phân trang.
+ * @returns {JSX.Element} Giao diện trang lịch sử điều khiển
+ */
 export default function ActionHistory() {
   const [deviceFilter, setDeviceFilter] = useState('ALL');
   const [actionFilter, setActionFilter] = useState('ALL');
@@ -69,11 +74,18 @@ export default function ActionHistory() {
     cacheKey
   );
 
+  /**
+   * Đảo ngược thứ tự sắp xếp theo thời gian (Giảm dần <-> Tăng dần) và quay về trang 1.
+   */
   function toggleSort() {
     setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
     setPage(1);
   }
 
+  /**
+   * Áp dụng các tiêu chí lọc được chọn vào bảng dữ liệu và quay về trang 1.
+   * @param {Event} event - Sự kiện submit của form lọc
+   */
   function applyFilter(event) {
     event.preventDefault();
     setApplied({
@@ -85,11 +97,19 @@ export default function ActionHistory() {
     setPage(1);
   }
 
+  /**
+   * Cập nhật số dòng hiển thị tối đa trên một trang và quay về trang 1.
+   * @param {number} nextLimit - Số lượng dòng mong muốn hiển thị mỗi trang
+   */
   function changeLimit(nextLimit) {
     setLimit(nextLimit);
     setPage(1);
   }
 
+  /**
+   * Xác nhận lại ô input số dòng mỗi trang để áp dụng.
+   * Nếu giá trị hợp lệ thì áp dụng giới hạn, nếu không trả lại giới hạn hiện hành.
+   */
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
@@ -100,6 +120,9 @@ export default function ActionHistory() {
     }
   }
 
+  /**
+   * Đặt lại toàn bộ các bộ lọc về giá trị mặc định ('ALL') và xóa input tìm kiếm thời gian.
+   */
   function clearFilter() {
     setDeviceFilter('ALL');
     setActionFilter('ALL');

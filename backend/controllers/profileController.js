@@ -1,10 +1,3 @@
-/**
- * controllers/profileController.js — Nghiệp vụ hồ sơ người dùng
- *
- * Hàm export:
- * - getProfile(req)  GET /api/profile: đọc users theo defaultUserId,
- *   trả thông tin cá nhân + 4 link tài liệu (github/figma/apidocs/baocao).
- */
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';
@@ -12,6 +5,7 @@ import { buildSelect } from '../utils/queryBuilder.js';
 import { ok } from '../utils/response.js';
 import { notFoundError } from '../utils/ApiError.js';
 
+// Tìm thông tin người dùng trong cơ sở dữ liệu theo ID
 async function findUserById(id) {
   const { sql, params } = buildSelect(User, {
     where: [{ sql: 'id = ?', params: [id] }],

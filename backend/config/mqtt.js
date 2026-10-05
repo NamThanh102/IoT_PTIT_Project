@@ -18,6 +18,11 @@ import { env } from './env.js';
 
 let client = null;
 
+/**
+ * Parse an toàn chuỗi JSON từ MQTT payload buffer/string, tránh văng lỗi làm crash ứng dụng
+ * @param {Buffer|string} raw - Dữ liệu thô nhận từ MQTT broker
+ * @returns {Object|null} Đối tượng JSON đã parse hoặc null nếu dữ liệu không hợp lệ
+ */
 function safeParse(raw) {
   try {
     return JSON.parse(raw.toString());
@@ -27,6 +32,13 @@ function safeParse(raw) {
   }
 }
 
+/**
+ * Khởi tạo kết nối MQTT Client đến broker, đăng ký lắng nghe (subscribe) các topic cần thiết
+ * @param {Object} handlers - Các hàm callback xử lý sự kiện
+ * @param {Function} handlers.sensorData - Callback xử lý khi nhận gói tin từ topic 'sensor_data'
+ * @param {Function} handlers.deviceResponse - Callback xử lý khi nhận gói tin từ topic 'device_response'
+ * @returns {import('mqtt').MqttClient} Instance của MQTT client
+ */
 export function connectMqtt(handlers = {}) {
   client = mqtt.connect(env.mqtt.url, {
     clientId: env.mqtt.clientId,
@@ -43,36 +55,29 @@ export function connectMqtt(handlers = {}) {
         console.error('[mqtt] Dang ky SUB that bai:', error.message);
         return;
       }
-      console.log(
-        `[mqtt] SUB ok -> "${env.mqtt.topics.sensorData}" va "${env.mqtt.topics.deviceResponse}"`
-      );
+      console.log(`[mqtt] SUB ok -> "${env.mqtt.topics.sensorData}" va "${env.mqtt.topics.deviceResponse}"`);
     });
   });
 
   client.on('message', (topic, rawPayload) => {
-    if (topic === env.mqtt.topics.sensorData) {
-      const payload = safeParse(rawPayload);
-      if (!payload) return;
+    const payload = safeParse(rawPayload);
+    if (!payload) return;
 
-      const room = payload.device_id || env.mqtt.room;
+    if (topic === env.mqtt.topics.sensorData) {
       handlers.sensorData?.({
-        room,
         temp: payload.temp,
         humi: payload.humi,
         light: payload.light,
       })
         .then(() => {
           console.log(
-            `[sensor_data] room=${room} temp=${payload.temp} humi=${payload.humi} light=${payload.light}`
+            `[sensor_data] temp=${payload.temp} humi=${payload.humi} light=${payload.light}`
           );
         })
         .catch((error) => {
           console.error('[sensor_data] luu DB that bai:', error.message);
         });
     } else if (topic === env.mqtt.topics.deviceResponse) {
-      const payload = safeParse(rawPayload);
-      if (!payload) return;
-
       handlers.deviceResponse?.(payload).catch((error) => {
         console.error('[device_response] cap nhat that bai:', error.message);
       });

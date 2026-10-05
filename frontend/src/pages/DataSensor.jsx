@@ -36,6 +36,11 @@ const TIME_HINT =
 const UNIT_MAP = { Temperature: '°C', Humidity: '%', Light: 'lux' };
 const TYPE_COLOR = { Temperature: '#b91c1c', Humidity: '#0369a1', Light: '#a16207' };
 
+/**
+ * Component DataSensor: Trang hiển thị bảng dữ liệu cảm biến.
+ * Hỗ trợ chức năng lọc dữ liệu theo nhiều tiêu chí, sắp xếp theo thời gian và phân trang.
+ * @returns {JSX.Element} Giao diện trang dữ liệu cảm biến
+ */
 export default function DataSensor() {
   const [field, setField] = useState('ALL');
   const [queryInput, setQueryInput] = useState('');
@@ -73,16 +78,27 @@ export default function DataSensor() {
     cacheKey
   );
 
+  /**
+   * Đảo ngược thứ tự sắp xếp thời gian của bảng (Tăng dần <-> Giảm dần) và đưa về trang đầu tiên.
+   */
   function toggleSort() {
     setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
     setPage(1);
   }
 
+  /**
+   * Thay đổi giới hạn số bản ghi hiển thị trên mỗi trang.
+   * @param {number} nextLimit - Số bản ghi mong muốn trên một trang
+   */
   function changeLimit(nextLimit) {
     setLimit(nextLimit);
     setPage(1);
   }
 
+  /**
+   * Xác nhận và áp dụng giới hạn số bản ghi mới sau khi người dùng nhập vào ô.
+   * Đảm bảo giá trị nhập vào là một số hợp lệ lớn hơn hoặc bằng 1.
+   */
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
@@ -93,12 +109,19 @@ export default function DataSensor() {
     }
   }
 
+  /**
+   * Áp dụng các điều kiện lọc khi form được submit.
+   * @param {Event} event - Sự kiện submit form
+   */
   function applyFilter(event) {
     event.preventDefault();
     setAppliedFilters({ field, query: queryInput.trim() });
     setPage(1);
   }
 
+  /**
+   * Xóa tất cả các điều kiện lọc và đưa bảng về trạng thái mặc định (trang 1, không lọc).
+   */
   function clearFilter() {
     setField('ALL');
     setQueryInput('');

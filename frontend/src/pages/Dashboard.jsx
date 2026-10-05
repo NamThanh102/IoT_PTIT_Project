@@ -32,15 +32,30 @@ import { getDataLatest, getDataChart, getDeviceStatus, postDeviceAction } from '
 const STALE_MS = 10000;
 const CONFIRM_WAIT_MS = 6000;
 
+/**
+ * Định dạng chuỗi thời gian MySQL để chỉ lấy phần giờ, phút, giây.
+ * @param {string} mysqlTime - Chuỗi thời gian trả về từ MySQL (VD: '2026-09-23 14:36:00')
+ * @returns {string} Trả về chuỗi chỉ chứa phần thời gian ('14:36:00') hoặc chuỗi rỗng nếu không có dữ liệu
+ */
 function formatTime(mysqlTime) {
   if (!mysqlTime) return '';
   return mysqlTime.slice(11);
 }
 
+/**
+ * Chuyển đổi chuỗi thời gian định dạng MySQL sang timestamp dạng số (milliseconds).
+ * @param {string} mysqlTime - Chuỗi thời gian MySQL (VD: '2026-09-23 14:36:00')
+ * @returns {number} Thời gian quy đổi sang timestamp (milliseconds)
+ */
 function parseTime(mysqlTime) {
   return new Date(String(mysqlTime).replace(' ', 'T')).getTime();
 }
 
+/**
+ * Component Dashboard: Hiển thị trang tổng quan.
+ * Bao gồm: 3 thẻ thông số mới nhất, biểu đồ dữ liệu thời gian thực và danh sách thiết bị để điều khiển.
+ * @returns {JSX.Element} Giao diện trang Dashboard
+ */
 export default function Dashboard() {
   const latestPoll = usePolling(getDataLatest, 2000, [], 'dashboard:latest');
   const chartPoll = usePolling((signal) => getDataChart(30, signal), 2000, [], 'dashboard:chart');
@@ -58,10 +73,20 @@ export default function Dashboard() {
   const latestAge = latest?.created_at ? Date.now() - parseTime(latest.created_at) : Number.POSITIVE_INFINITY;
   const isLive = Boolean(latest) && !pollError && latestAge < STALE_MS;
 
+  /**
+   * Lấy trạng thái hiển thị của một thiết bị.
+   * Ưu tiên trạng thái đang chờ xử lý (pending) nếu có, ngược lại trả về trạng thái thật của thiết bị.
+   * @param {Object} device - Thông tin của thiết bị
+   * @returns {string} Trạng thái cần hiển thị ('ON' hoặc 'OFF')
+   */
   function displayedState(device) {
     return pending[device.name] || device.state;
   }
 
+  /**
+   * Xóa trạng thái đang chờ xử lý của một thiết bị khỏi state pending.
+   * @param {string} deviceName - Tên của thiết bị cần xóa khỏi danh sách pending
+   */
   function clearPending(deviceName) {
     delete pendingStartRef.current[deviceName];
     setPending((prev) => {
@@ -102,6 +127,11 @@ export default function Dashboard() {
     if (changed) setPending(next);
   }, [deviceList, pending]);
 
+  /**
+   * Xử lý khi người dùng nhấn nút chuyển đổi (toggle) trạng thái thiết bị.
+   * Cập nhật trạng thái pending cục bộ ngay lập tức (optimistic UI) và gửi API gọi lệnh.
+   * @param {Object} device - Thiết bị cần điều khiển
+   */
   async function handleToggle(device) {
     if (pending[device.name]) return;
     const target = displayedState(device) === 'ON' ? 'OFF' : 'ON';

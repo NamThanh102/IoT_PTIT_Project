@@ -1,13 +1,7 @@
 /**
- * config/env.js — Đọc & chuẩn hóa cấu hình từ biến môi trường (.env)
- *
- * Vai trò: "nguồn sự thật" duy nhất về cấu hình; mọi module dùng `env`
- * thay vì đọc process.env rải rác. Hàm toNumber cho fallback an toàn.
- *
  * Nhóm giá trị:
- * - port: cổng HTTP server
  * - db: host/port/user/password/database/connectionLimit (MySQL pool, xem db.js)
- * - mqtt: url broker, username/password, room, timeout lệnh, các topic
+ * - mqtt: url broker, username/password, timeout lệnh, các topic
  * - defaultUserId: user mặc định cho /api/profile và cột userID trong action
  */
 import dotenv from 'dotenv';
@@ -37,7 +31,6 @@ export const env = {
     username: process.env.MQTT_USERNAME || '',
     password: process.env.MQTT_PASSWORD || '',
     clientId: process.env.MQTT_CLIENT_ID || 'iot-backend',
-    room: process.env.MQTT_ROOM || 'room1',
     actionTimeoutMs: toNumber(process.env.ACTION_TIMEOUT_MS, 5000),
     topics: {
       sensorData: 'sensor_data',

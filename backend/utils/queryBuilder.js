@@ -1,13 +1,3 @@
-/**
- * utils/queryBuilder.js — Sinh SQL tham số hóa an toàn (chống SQL injection)
- *
- * Hàm export:
- * - tableName(key)      lấy tên bảng theo key đăng ký trong TABLES
- * - buildInsert(model, data, raw)  INSERT chỉ các cột có giá trị; raw = SQL thô (vd NOW())
- * - buildSelect(model, opts)       SELECT với where/joins/group/order/limit/offset
- *
- * Mọi controller dùng chung để tránh lặp cú pháp SQL và rò rỉ tham số.
- */
 import { User } from '../models/User.js';
 import { Sensor } from '../models/Sensor.js';
 import { Device } from '../models/Device.js';
@@ -22,6 +12,7 @@ export const TABLES = {
   action: Action,
 };
 
+// Lấy tên bảng tương ứng từ từ khóa định danh bảng đã đăng ký trong TABLES
 export function tableName(key) {
   const model = TABLES[key];
   if (!model) {
@@ -30,6 +21,7 @@ export function tableName(key) {
   return model.table;
 }
 
+// Xây dựng câu lệnh INSERT SQL kèm mảng tham số chuẩn hóa (Prepared Statement)
 export function buildInsert(model, data, raw = {}) {
   const columns = [];
   const placeholders = [];
@@ -50,6 +42,7 @@ export function buildInsert(model, data, raw = {}) {
   return { sql, params };
 }
 
+// Xây dựng câu truy vấn SELECT SQL linh hoạt có hỗ trợ alias, JOIN, WHERE, ORDER BY, LIMIT, OFFSET
 export function buildSelect(model, { columns, alias = '', joins = '', where = [], group = '', order, limit, offset } = {}) {
   const params = [];
   const colList = columns || model.columns.join(', ');

@@ -6,6 +6,7 @@
  * Dùng cho filter time của /api/data/getall và /api/device/history.
  * Trả về { unit, start, end } hoặc null nếu không khớp / sai giá trị.
  */
+
 const PATTERNS = [
   { regex: /^(\d{4})$/, unit: 'year' },
   { regex: /^(\d{4})-(\d{2})$/, unit: 'month' },
@@ -15,10 +16,12 @@ const PATTERNS = [
   { regex: /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})$/, unit: 'second' },
 ];
 
+// Chèn thêm số 0 vào trước chuỗi/số nếu độ dài nhỏ hơn 2 (ví dụ: 5 -> '05')
 function pad(value) {
   return String(value).padStart(2, '0');
 }
 
+// Xây dựng khoảng thời gian [start, end] tương ứng dựa trên các thành phần thời gian và đơn vị lọc
 function buildRange(parts, unit) {
   const [year, month, day, hour, minute, second] = parts;
   switch (unit) {
@@ -41,6 +44,7 @@ function buildRange(parts, unit) {
   }
 }
 
+// Cộng thêm một số ngày vào một ngày cụ thể
 function addDays(dateStr, days) {
   const date = new Date(`${dateStr}T00:00:00`);
   date.setDate(date.getDate() + days);
@@ -50,6 +54,7 @@ function addDays(dateStr, days) {
   return `${y}-${m}-${d} 00:00:00`;
 }
 
+// Phân tích cú pháp chuỗi thời gian đầu vào linh hoạt (năm, tháng, ngày, giờ, phút, giây) thành khoảng thời gian [start, end]
 export function parseFlexibleTime(input) {
   if (input === undefined || input === null || String(input).trim() === '') {
     return null;

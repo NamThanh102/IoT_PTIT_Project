@@ -73,7 +73,7 @@ Hệ thống cho phép **giám sát trực tiếp** 3 chỉ số môi trường 
 ESP32 (mỗi 2s) → publish JSON `{device_id, temp, humi, light}` → topic `sensor_data` → Backend subscribes → `saveSensorSample()` → INSERT 3 dòng vào bảng `datasensors`
 
 **Luồng điều khiển LED:**  
-Frontend click ON/OFF → POST `/api/device/action` `{device_id, action}` → Backend INSERT dòng `loading` vào bảng `action` → publish `{room_id, led1:'on'}` → topic `device_control` → ESP32 nhận → LED bật/tắt → publish `{led1:'ON'}` → topic `device_response` → Backend INSERT dòng `ON/OFF` (giữ lại dòng `loading`)
+Frontend click ON/OFF → POST `/api/device/action` `{device_id, action}` → Backend INSERT dòng `loading` vào bảng `action` → publish `{led1:'on'}` → topic `device_control` → ESP32 nhận → LED bật/tắt → publish `{led1:'ON'}` → topic `device_response` → Backend INSERT dòng `ON/OFF` (giữ lại dòng `loading`)
 
 **Luồng timeout (ESP32 không phản hồi):**  
 Backend chờ `ACTION_TIMEOUT_MS` (5s) → INSERT dòng `FAILED` vào `action` → LED button tự revert OFF trên frontend
@@ -242,7 +242,6 @@ MQTT_URL=mqtt://127.0.0.1:8386
 MQTT_USERNAME=nguyenthanhnam
 MQTT_PASSWORD=123
 MQTT_CLIENT_ID=iot-backend
-MQTT_ROOM=room1
 ACTION_TIMEOUT_MS=5000
 
 SENSOR_NODE_DEVICE_ID=sensornode
@@ -558,11 +557,10 @@ GET /api/profile
 | Topic | Chiều | Publisher | Subscriber | Payload mẫu |
 |-------|-------|-----------|------------|-------------|
 | `sensor_data` | ESP32 → Backend | ESP32 | Backend | `{"device_id":"B23DCCN587","temp":29.5,"humi":58.8,"light":2700}` |
-| `device_control` | Backend → ESP32 | Backend | ESP32 | `{"room_id":"room1","led1":"on"}` |
+| `device_control` | Backend → ESP32 | Backend | ESP32 | `{"led1":"on"}` |
 | `device_response` | ESP32 → Backend | ESP32 | Backend | `{"led1":"ON","led2":"OFF"}` |
 
 - `device_id` trong `sensor_data` được dùng làm định danh node sensor.
-- `room_id` trong `device_control` là room identifier (cấu hình trong `.env`).
 - `led1`/`led2` trong `device_control`: giá trị `"on"` / `"off"` (không phân biệt hoa thường).
 
 ---

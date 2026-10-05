@@ -36,11 +36,20 @@ const KEY_TO_LED_NAME = Object.fromEntries(
 
 const pendingTimers = new Map();
 
+/**
+ * Tạm dừng thực thi cho đến giây tiếp theo
+ * @param {number} bufferMs - Thời gian đệm thêm (ms)
+ * @returns {Promise<void>}
+ */
 function sleepUntilNextSecond(bufferMs = 50) {
   const delay = 1000 - (Date.now() % 1000) + bufferMs;
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+/**
+ * Xóa bộ đếm thời gian đang chờ xử lý của một thiết bị
+ * @param {string} deviceId - ID của thiết bị
+ */
 function clearPendingTimer(deviceId) {
   const pending = pendingTimers.get(deviceId);
   if (pending) {
@@ -49,12 +58,22 @@ function clearPendingTimer(deviceId) {
   }
 }
 
+/**
+ * Chuẩn hóa trạng thái thiết bị dựa trên hành động hiện tại
+ * @param {string} status - Trạng thái thô
+ * @param {string} action - Hành động (ON/OFF)
+ * @returns {string} Trạng thái đã được chuẩn hóa
+ */
 function normalizeState(status, action) {
   if (status === 'loading') return 'loading';
   if (status === 'failed') return action === 'ON' ? 'OFF' : 'ON';
   return status;
 }
 
+/**
+ * Lấy danh sách tất cả các thiết bị điều khiển được
+ * @returns {Promise<Array>} Mảng các thiết bị
+ */
 async function listDevices() {
   const { sql, params } = buildSelect(Device, {
     columns: ['id', 'name'],
@@ -64,6 +83,11 @@ async function listDevices() {
   return rows;
 }
 
+/**
+ * Tìm thiết bị theo tên chính xác
+ * @param {string} name - Tên thiết bị
+ * @returns {Promise<Object|null>} Đối tượng thiết bị hoặc null
+ */
 async function findDeviceByName(name) {
   const { sql, params } = buildSelect(Device, {
     columns: ['id', 'name'],
@@ -74,6 +98,11 @@ async function findDeviceByName(name) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+/**
+ * Tìm danh sách ID thiết bị theo một phần tên
+ * @param {string} namePart - Chuỗi con của tên thiết bị
+ * @returns {Promise<Array>} Mảng các ID thiết bị tìm được
+ */
 async function findDevicesByNamePart(namePart) {
   const { sql, params } = buildSelect(Device, {
     columns: ['id'],
@@ -83,6 +112,14 @@ async function findDevicesByNamePart(namePart) {
   return rows.map((row) => row.id);
 }
 
+/**
+ * Ghi lại một hành động của thiết bị vào cơ sở dữ liệu
+ * @param {Object} data - Thông tin hành động
+ * @param {string} data.deviceId - ID của thiết bị
+ * @param {string} data.action - Hành động (vd: ON, OFF)
+ * @param {string} data.status - Trạng thái của hành động
+ * @returns {Promise<string>} ID của hành động vừa thêm
+ */
 async function insertAction({ deviceId, action, status }) {
   const id = newId();
   const { sql, params } = buildInsert(
@@ -94,6 +131,11 @@ async function insertAction({ deviceId, action, status }) {
   return id;
 }
 
+/**
+ * Tìm hành động ở trạng thái "loading" mới nhất của thiết bị
+ * @param {string} deviceId - ID của thiết bị
+ * @returns {Promise<Object|null>} Hành động đang loading hoặc null
+ */
 async function findLatestLoadingAction(deviceId) {
   const { sql, params } = buildSelect(Action, {
     columns: ['id', 'action'],
@@ -105,6 +147,10 @@ async function findLatestLoadingAction(deviceId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+/**
+ * Lấy trạng thái hoạt động cuối cùng (không phải loading) của từng thiết bị
+ * @returns {Promise<Array>} Mảng lịch sử hành động mới nhất của mỗi thiết bị
+ */
 async function findLatestActionPerDevice() {
   const sql = `
     SELECT a.id, a.action, a.status, a.created_at, a.deviceID AS deviceId
@@ -120,6 +166,16 @@ async function findLatestActionPerDevice() {
   return rows;
 }
 
+/**
+ * Xây dựng các điều kiện lọc lịch sử thiết bị
+ * @param {Object} filters - Các tham số lọc
+ * @param {string} [filters.status] - Trạng thái cần lọc
+ * @param {Object} [filters.timeRange] - Khoảng thời gian
+ * @param {Array} [filters.deviceIds] - Danh sách ID thiết bị
+ * @param {string} [filters.deviceID] - ID thiết bị cụ thể
+ * @param {string} [filters.action] - Hành động cần lọc
+ * @returns {Array} Mảng các điều kiện WHERE
+ */
 function buildHistoryConditions({ status, timeRange, deviceIds, deviceID, action }) {
   const where = [];
   if (status && status !== 'ALL') {
@@ -147,6 +203,15 @@ function buildHistoryConditions({ status, timeRange, deviceIds, deviceID, action
   return where;
 }
 
+/**
+ * Lấy lịch sử hành động của thiết bị với phân trang và lọc
+ * @param {Object} pagination - Phân trang
+ * @param {number} pagination.limit - Giới hạn số lượng
+ * @param {number} pagination.offset - Vị trí bắt đầu
+ * @param {Object} filters - Các điều kiện lọc
+ * @param {string} sortDir - Hướng sắp xếp (asc|desc)
+ * @returns {Promise<Array>} Mảng dữ liệu lịch sử thiết bị
+ */
 async function findHistory({ limit, offset }, filters, sortDir) {
   const { sql, params } = buildSelect(Action, {
     columns: 'a.id, a.userID, a.deviceID AS device_id, d.name AS device_name, a.action, UPPER(a.status) AS status, a.created_at',
@@ -161,6 +226,11 @@ async function findHistory({ limit, offset }, filters, sortDir) {
   return rows;
 }
 
+/**
+ * Đếm tổng số lượng bản ghi lịch sử theo bộ lọc
+ * @param {Object} filters - Các điều kiện lọc
+ * @returns {Promise<number>} Tổng số bản ghi lịch sử
+ */
 async function countHistory(filters) {
   const { sql, params } = buildSelect(Action, {
     columns: 'COUNT(*) AS total',
@@ -171,6 +241,10 @@ async function countHistory(filters) {
   return Number(rows[0].total);
 }
 
+/**
+ * Lấy trạng thái hiện tại của tất cả các thiết bị hỗ trợ điều khiển
+ * @returns {Promise<Array>} Mảng trạng thái của các thiết bị (ON/OFF/LOADING...)
+ */
 async function getDeviceStatus() {
   const devices = await listDevices();
   const latestByDevice = new Map();
@@ -192,6 +266,13 @@ async function getDeviceStatus() {
     });
 }
 
+/**
+ * Gửi lệnh điều khiển thiết bị (publish qua MQTT)
+ * @param {Object} payload - Thông tin lệnh
+ * @param {string} payload.deviceId - ID của thiết bị cần điều khiển
+ * @param {string} payload.action - Hành động điều khiển (ON/OFF)
+ * @returns {Promise<Object>} Kết quả của quá trình gửi lệnh
+ */
 async function sendAction({ deviceId, action }) {
   if (!deviceId || !action) {
     throw badRequest('Thieu device_id hoac action');
@@ -220,7 +301,6 @@ async function sendAction({ deviceId, action }) {
 
   try {
     publishDeviceControl({
-      room_id: env.mqtt.room,
       [ledKey]: normalizedAction.toLowerCase(),
     });
   } catch (error) {
@@ -264,6 +344,11 @@ async function sendAction({ deviceId, action }) {
   };
 }
 
+/**
+ * Xử lý phản hồi từ thiết bị thông qua MQTT
+ * @param {Object} payload - Dữ liệu trạng thái thực tế trả về từ thiết bị
+ * @returns {Promise<void>}
+ */
 export async function handleDeviceResponse(payload) {
   const entries = Object.entries(payload || {}).filter(([key]) => KEY_TO_LED_NAME[key]);
   if (entries.length === 0) return;
@@ -291,6 +376,13 @@ export async function handleDeviceResponse(payload) {
   }
 }
 
+/**
+ * Truy vấn dữ liệu lịch sử và đếm tổng số (dùng cho API)
+ * @param {Object} pagination - Thông tin phân trang
+ * @param {Object} filters - Các bộ lọc
+ * @param {string} sortDir - Hướng sắp xếp
+ * @returns {Promise<Object>} Object chứa rows và total
+ */
 async function queryHistory({ limit, offset }, filters, sortDir) {
   const [rows, total] = await Promise.all([
     findHistory({ limit, offset }, filters, sortDir),
@@ -299,6 +391,13 @@ async function queryHistory({ limit, offset }, filters, sortDir) {
   return { rows, total };
 }
 
+/**
+ * API Handler: Lấy trạng thái thiết bị hiện tại
+ * @param {Object} req - Express Request
+ * @param {Object} res - Express Response
+ * @param {Function} next - Express Next
+ * @returns {Promise<Object>} Response chứa danh sách trạng thái thiết bị
+ */
 export async function getStatus(req, res, next) {
   try {
     const data = await getDeviceStatus();
@@ -308,6 +407,13 @@ export async function getStatus(req, res, next) {
   }
 }
 
+/**
+ * API Handler: Gửi lệnh điều khiển thiết bị
+ * @param {Object} req - Express Request
+ * @param {Object} res - Express Response
+ * @param {Function} next - Express Next
+ * @returns {Promise<Object>} Response xác nhận lệnh đang xử lý
+ */
 export async function postAction(req, res, next) {
   try {
     const { device_id, action } = req.body || {};
@@ -322,6 +428,13 @@ export async function postAction(req, res, next) {
   }
 }
 
+/**
+ * API Handler: Lấy lịch sử điều khiển thiết bị có lọc và phân trang
+ * @param {Object} req - Express Request
+ * @param {Object} res - Express Response
+ * @param {Function} next - Express Next
+ * @returns {Promise<Object>} Response chứa dữ liệu lịch sử
+ */
 export async function getHistory(req, res, next) {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
