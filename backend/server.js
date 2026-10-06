@@ -3,13 +3,13 @@ import cors from 'cors';
 import apiRoutes from './routes/api.js';
 import { env } from './config/env.js';
 import { connectMqtt } from './config/mqtt.js';
-import * as sensorController from './controllers/sensorController.js';
-import * as deviceController from './controllers/deviceController.js';
+import * as sensorService from './services/sensorService.js';
+import * as deviceService from './services/deviceService.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 
 connectMqtt({
-  sensorData: sensorController.saveSensorSample,
-  deviceResponse: deviceController.handleDeviceResponse,
+  sensorData: sensorService.saveSensorSample,
+  deviceResponse: deviceService.handleDeviceResponse,
 });
 
 const app = express();
