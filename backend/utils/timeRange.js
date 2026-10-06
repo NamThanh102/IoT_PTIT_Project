@@ -1,12 +1,3 @@
-/**
- * utils/timeRange.js — Parse chuỗi thời gian linh hoạt ra khoảng [start, end]
- *
- * Hỗ trợ định dạng: 2026 | 2026-09 | 2026-09-14 | "2026-09-14 10" |
- * "2026-09-14 10:30" | "2026-09-14 10:30:45" (phân cách 'T' hoặc space).
- * Dùng cho filter time của /api/data/getall và /api/device/history.
- * Trả về { unit, start, end } hoặc null nếu không khớp / sai giá trị.
- */
-
 const PATTERNS = [
   { regex: /^(\d{4})$/, unit: 'year' },
   { regex: /^(\d{4})-(\d{2})$/, unit: 'month' },

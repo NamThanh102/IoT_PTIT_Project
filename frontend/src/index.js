@@ -1,10 +1,3 @@
-/**
- * index.js — Entry của React app
- *
- * - Import 2 stylesheet theo thứ tự: tokens.css (biến CSS toàn cục + reset)
- *   rồi app.css (style component) — thứ tự quyết định cascade.
- * - Gắn <App/> (routing ở App.jsx) vào #root, bọc <StrictMode> + <BrowserRouter>.
- */
 import React from 'react';
 import { createElement } from 'react';
 import ReactDOM from 'react-dom/client';

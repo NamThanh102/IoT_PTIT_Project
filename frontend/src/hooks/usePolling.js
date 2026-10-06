@@ -1,53 +1,48 @@
-/**
- * hooks/usePolling.js — Hook lấy dữ liệu định kỳ + cache + huỷ request
- *
- * Tính năng:
- * - Poll lại fetcher mỗi intervalMs bằng AbortController (huỷ request cũ khi thay đổi).
- * - intervalMs <= 0: chỉ fetch 1 lần lúc mount + khi deps đổi + khi refetch(), KHÔNG tự poll.
- * - Cache toàn cục theo cacheKey (Map ở module) → trở lại trang hiển thị dữ liệu ngay,
- *   không flash loading. cacheKey có thể là chuỗi fingerprint (page/filter/sort).
- * - Tạm dừng poll khi tab ẩn (document.hidden), tự chạy lại khi tab hiện.
- * - refetch(): abort request đang chạy dở, tải lại ngay (nút Reload) và cập nhật cache.
- * - Không setState sau khi component unmount (mountedRef).
- *
- * Tham số: fetcher(signal), intervalMs, deps (khi đổi → chạy lại effect — cần đưa intervalMs
- * vào deps nếu nó thay đổi theo điều kiện), cacheKey (chuỗi, thường là fingerprint).
- * Trả về: { data, error, loading, refetch }.
- */
+// Custom Hook: Lấy dữ liệu định kỳ (Polling) + Cache dữ liệu + Hủy request cũ tránh xung đột
 import { useEffect, useRef, useState, useCallback } from 'react';
 
+// Cache toàn cục (giúp mượt mà, k bị loading)
 const cache = new Map();
 
 export function usePolling(fetcher, intervalMs = 2000, deps = [], cacheKey = null) {
+  // Khởi tạo dữ liệu từ cache nếu có 
   const cacheKeyRef = useRef(cacheKey);
   cacheKeyRef.current = cacheKey;
   const cached = cacheKey ? cache.get(cacheKey) : null;
 
+  // các State qly dữ liệu
   const [data, setData] = useState(cached || null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(!cached);
   
-  const runningRef = useRef(false);
-  const timerRef = useRef(null);
-  const controllerRef = useRef(null);
-  const mountedRef = useRef(true);
+  // Các Ref qly tiến trình ngầm 
+  const runningRef = useRef(false);         // Cờ đánh dấu có request nào đang chạy dở hay không
+  const timerRef = useRef(null);            // Lưu id của bộ đếm setInterval
+  const controllerRef = useRef(null);       // Bộ điều khiển AbortController để hủy HTTP request
+  const mountedRef = useRef(true);          // Đánh dấu component còn hiển thị hay đã bị đóng (unmounted)
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
+  //  Hàm thực thi gọi API 
   const run = useCallback(async () => {
     if (runningRef.current) return;
     runningRef.current = true;
+
+    // Hủy request trước đó nếu nó chưa kịp phản hồi
     if (controllerRef.current) controllerRef.current.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
+
     try {
       const result = await fetcherRef.current(controller.signal);
+      // cập nhật dữ liệu nếu component vẫn còn đang hiển thị trên màn hình
       if (mountedRef.current && controllerRef.current === controller) {
         setData(result);
         setError(null);
         if (cacheKeyRef.current) cache.set(cacheKeyRef.current, result);
       }
     } catch (err) {
+      // Bỏ qua lỗi nếu request bị chủ động hủy (CanceledError)
       if (mountedRef.current && controllerRef.current === controller && err.name !== 'CanceledError') {
         setError(err.message);
       }
@@ -60,16 +55,20 @@ export function usePolling(fetcher, intervalMs = 2000, deps = [], cacheKey = nul
     }
   }, []);
 
+  // Vòng đời Polling: useEffect lặp lại và tạm dừng khi ẩn tab trình duyệt
   useEffect(() => {
     mountedRef.current = true;
 
+    // Bắt đầu chu kỳ lấy dữ liệu định kỳ
     function start() {
-      if (document.hidden) return;
+      if (document.hidden) return; // Nếu đang ẩn tab thì không chạy
       void run();
       if (timerRef.current) clearInterval(timerRef.current);
+      // Nếu intervalMs > 0 thì tự động lặp lại; nếu <= 0 thì chỉ gọi đúng 1 lần
       timerRef.current = intervalMs > 0 ? setInterval(run, intervalMs) : null;
     }
 
+    // Xử lý tiết kiệm tài nguyên khi người dùng chuyển sang tab khác trên trình duyệt
     function handleVisibility() {
       if (document.hidden) {
         if (timerRef.current) clearInterval(timerRef.current);
@@ -85,6 +84,7 @@ export function usePolling(fetcher, intervalMs = 2000, deps = [], cacheKey = nul
     start();
     document.addEventListener('visibilitychange', handleVisibility);
 
+    // Dọn dẹp bộ nhớ (Cleanup) khi component bị unmount hoặc deps thay đổi
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
@@ -94,9 +94,9 @@ export function usePolling(fetcher, intervalMs = 2000, deps = [], cacheKey = nul
       controllerRef.current = null;
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
+  // Hàm ép tải lại dữ liệu ngay lập tức (dùng cho nút Reload)
   const refetch = useCallback(() => {
     if (controllerRef.current) controllerRef.current.abort();
     controllerRef.current = null;

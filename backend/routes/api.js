@@ -1,16 +1,3 @@
-/**
- * routes/api.js — Danh bạ REST API (path → handler controller)
- *
- * Endpoint:
- * - GET  /data/latest     cảm biến mẫu mới nhất
- * - GET  /data/chart      N mẫu gần nhất cho biểu đồ
- * - GET  /data/getall     dữ liệu cảm biến phân trang + lọc (time, name, value)
- * 
- * - GET  /device/status   trạng thái hiện tại các thiết bị
- * - POST /device/action   gửi lệnh bật/tắt thiết bị (qua MQTT)
- * - GET  /device/history  lịch sử tác động phân trang + lọc
- 
- */
 import { Router } from 'express';
 import * as sensorController from '../controllers/sensorController.js';
 import * as deviceController from '../controllers/deviceController.js';
@@ -18,17 +5,17 @@ import * as profileController from '../controllers/profileController.js';
 
 const router = Router();
 
-// Sensor data
-router.get('/data/latest', sensorController.getLatest);
-router.get('/data/chart', sensorController.getChart);
-router.get('/data/getall', sensorController.getAllData);
+// --- 1. Nhóm API dữ liệu cảm biến (Sensor Data) ---
+router.get('/data/latest', sensorController.getLatest); // Lấy mẫu dữ liệu cảm biến mới nhất (Dashboard)
+router.get('/data/chart', sensorController.getChart);   // Lấy dữ liệu gần đây để vẽ biểu đồ realtime
+router.get('/data/getall', sensorController.getAllData); // Lấy danh sách cảm biến (hỗ trợ lọc, phân trang, sắp xếp)
 
-// Device control
-router.get('/device/status', deviceController.getStatus);
-router.post('/device/action', deviceController.postAction);
-router.get('/device/history', deviceController.getHistory);
+// --- 2. Nhóm API điều khiển & Lịch sử thiết bị (Device Control & History) ---
+router.get('/device/status', deviceController.getStatus);   // Lấy trạng thái hiện tại của tất cả thiết bị
+router.post('/device/action', deviceController.postAction); // Gửi lệnh bật/tắt thiết bị qua MQTT
+router.get('/device/history', deviceController.getHistory); // Lấy lịch sử thao tác thiết bị (lọc, phân trang)
 
-// Profile
-router.get('/profile', profileController.getProfile);
+// --- 3. Nhóm API thông tin cá nhân (Profile) ---
+router.get('/profile', profileController.getProfile);       // Lấy thông tin cá nhân sinh viên
 
 export default router;

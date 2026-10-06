@@ -1055,19 +1055,20 @@ body,
 
 .toast {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  bottom: 24px;
+  right: 24px;
   z-index: 1000;
   display: flex;
   align-items: center;
-  gap: 10px;
-  max-width: 360px;
-  padding: 12px 14px;
+  gap: 14px;
+  min-width: 280px;
+  max-width: 440px;
+  padding: 15px 20px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
-  box-shadow: 0 6px 24px rgba(11, 28, 48, 0.14);
-  animation: toast-in 0.2s ease;
+  box-shadow: 0 8px 30px rgba(11, 28, 48, 0.18);
+  animation: toast-in 0.25s ease;
 }
 
 .toast-error {
@@ -1089,7 +1090,7 @@ body,
 }
 
 .toast-close {
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   color: inherit;
   opacity: 0.7;
@@ -1103,7 +1104,7 @@ body,
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;

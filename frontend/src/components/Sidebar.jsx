@@ -1,9 +1,5 @@
 /**
  * Sidebar.jsx — Menu điều hướng trái
- *
- * - NAV_ITEMS: danh sách 4 trang (Dashboard, DataSensor, Action History, Profile).
- * - NavLink tự đánh dấu .active theo đường dẫn hiện tại.
- * - Đầu sidebar là brand "IoT System", cuối là chân trang MSSV (prop msv từ /api/profile).
  */
 import { NavLink } from 'react-router-dom';
 import { DashboardIcon, SensorIcon, HistoryIcon, UserIcon } from './Icons.jsx';

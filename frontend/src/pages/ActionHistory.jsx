@@ -1,17 +1,3 @@
-/**
- * pages/ActionHistory.jsx — Trang lịch sử tác động thiết bị (bảng + lọc)
- *
- * Luồng dữ liệu:
- * - Lọc: Device (dropdown LED_1/LED_2), Action, Status, Time → applied (deps) + page.
- * - Số dòng mỗi trang (Rows/page, ô nhập số bất kỳ, mặc định 10) → đổi limit tự về page 1.
- * - Dòng nằm trong table-footer (kèm Total + Pagination) vì thuộc phân trang, KHÔNG phải bộ lọc.
- * - Nút sort (Giảm dần/Tăng dần) kết hợp được với bộ lọc; mặc định giảm dần theo time.
- * - usePolling(getDeviceHistory(...), pollInterval, deps, cacheKey):
- *   pollInterval = 0 khi đang lọc (không tự poll), 3000 khi không lọc;
- *   cacheKey = fingerprint(page + limit + filter + sort) để cache riêng từng tổ hợp.
- * - Bảng 6 cột + StatusBadge màu theo trạng thái + Pagination + Reload.
- * Định danh thiết bị là `name` (LED_1/LED_2); bảng action không còn sensorID.
- */
 import { useState } from 'react';
 import Pagination from '../components/Pagination.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
@@ -24,11 +10,6 @@ const DEVICE_OPTIONS = ['ALL', 'LED_1', 'LED_2'];
 const TIME_HINT =
   'e.g 2026-08-22 10:30:45';
 
-/**
- * Component ActionHistory: Trang hiển thị lịch sử tác động/điều khiển thiết bị.
- * Hỗ trợ lọc theo thiết bị, hành động, trạng thái, khoảng thời gian, có sắp xếp và phân trang.
- * @returns {JSX.Element} Giao diện trang lịch sử điều khiển
- */
 export default function ActionHistory() {
   const [deviceFilter, setDeviceFilter] = useState('ALL');
   const [actionFilter, setActionFilter] = useState('ALL');
@@ -74,18 +55,13 @@ export default function ActionHistory() {
     cacheKey
   );
 
-  /**
-   * Đảo ngược thứ tự sắp xếp theo thời gian (Giảm dần <-> Tăng dần) và quay về trang 1.
-   */
+  // Đảo ngược thứ tự sắp xếp theo thời gian (Giảm dần <-> Tăng dần) và quay về trang 1.
   function toggleSort() {
     setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
     setPage(1);
   }
 
-  /**
-   * Áp dụng các tiêu chí lọc được chọn vào bảng dữ liệu và quay về trang 1.
-   * @param {Event} event - Sự kiện submit của form lọc
-   */
+  // Áp dụng các tiêu chí lọc được chọn vào bảng dữ liệu và quay về trang 1.
   function applyFilter(event) {
     event.preventDefault();
     setApplied({
@@ -97,19 +73,13 @@ export default function ActionHistory() {
     setPage(1);
   }
 
-  /**
-   * Cập nhật số dòng hiển thị tối đa trên một trang và quay về trang 1.
-   * @param {number} nextLimit - Số lượng dòng mong muốn hiển thị mỗi trang
-   */
+  // Cập nhật số dòng hiển thị tối đa trên một trang và quay về trang 1.
   function changeLimit(nextLimit) {
     setLimit(nextLimit);
     setPage(1);
   }
 
-  /**
-   * Xác nhận lại ô input số dòng mỗi trang để áp dụng.
-   * Nếu giá trị hợp lệ thì áp dụng giới hạn, nếu không trả lại giới hạn hiện hành.
-   */
+  // Xác nhận lại ô input số dòng mỗi trang để áp dụng.
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
@@ -120,9 +90,7 @@ export default function ActionHistory() {
     }
   }
 
-  /**
-   * Đặt lại toàn bộ các bộ lọc về giá trị mặc định ('ALL') và xóa input tìm kiếm thời gian.
-   */
+  // Đặt lại toàn bộ các bộ lọc về giá trị mặc định ('ALL') và xóa input tìm kiếm thời gian.
   function clearFilter() {
     setDeviceFilter('ALL');
     setActionFilter('ALL');
@@ -134,9 +102,10 @@ export default function ActionHistory() {
 
   return (
     <div className="page">
-      {/* filter */}
+      
+      {/* Bộ lọc lịch sử thiết bị */}
       <section className="card">
-<form className="filter-grid-6" onSubmit={applyFilter}>
+        <form className="filter-grid-6" onSubmit={applyFilter}>
           <div className="filter-group">
             <label className="filter-label">Device</label>
             <select
@@ -193,7 +162,8 @@ export default function ActionHistory() {
           </div>
         </form>
       </section>
-      {/* table */}
+
+      {/* Bảng lịch sử thao tác thiết bị */}
       <section className="card table-card">
         <div className="card-header">
           <h3 className="card-title">Action History</h3>
@@ -248,6 +218,8 @@ export default function ActionHistory() {
                 ))}
               </tbody>
             </table>
+
+            {/* Phân trang và số dòng/trang */}
             <div className="table-footer">
               <span className="total-text">Total: {data.pagination.total_records} records</span>
               <div className="rows-page">

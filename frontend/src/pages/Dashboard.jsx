@@ -1,16 +1,3 @@
-/**
- * pages/Dashboard.jsx — Trang tổng quan: 3 thẻ số liệu + biểu đồ realtime + điều khiển LED
- *
- * Luồng dữ liệu (gọi thẳng các endpoint theo apidocs, poll 2s):
- * - usePolling(getDataLatest, 2000, [], 'dashboard:latest')       → GET /data/latest
- * - usePolling((s) => getDataChart(30, s), 2000, [], 'dashboard:chart') → GET /data/chart?limit=30
- * - usePolling(getDeviceStatus, 2000, [], 'dashboard:devices')    → GET /device/status
- * - latest → 3 StatCard; chart → Recharts LineChart (2 trục Y); devices → 2 card LED + ToggleSwitch.
- * - isLive: dữ liệu trong 10 giây (STALE_MS) → chấm "Live", ngược lại "Sensor Offline".
- *
- * Điều khiển LED: `name` (LED_1/LED_2) là định danh gửi lệnh; `device_id` là khóa chính
- * 10 ký tự (hiển thị trên card). Optimistic + xác nhận qua polling.
- */
 import { useEffect, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
@@ -32,30 +19,17 @@ import { getDataLatest, getDataChart, getDeviceStatus, postDeviceAction } from '
 const STALE_MS = 10000;
 const CONFIRM_WAIT_MS = 6000;
 
-/**
- * Định dạng chuỗi thời gian MySQL để chỉ lấy phần giờ, phút, giây.
- * @param {string} mysqlTime - Chuỗi thời gian trả về từ MySQL (VD: '2026-09-23 14:36:00')
- * @returns {string} Trả về chuỗi chỉ chứa phần thời gian ('14:36:00') hoặc chuỗi rỗng nếu không có dữ liệu
- */
+// Định dạng chuỗi thời gian MySQL để chỉ lấy phần giờ, phút, giây.
 function formatTime(mysqlTime) {
   if (!mysqlTime) return '';
   return mysqlTime.slice(11);
 }
 
-/**
- * Chuyển đổi chuỗi thời gian định dạng MySQL sang timestamp dạng số (milliseconds).
- * @param {string} mysqlTime - Chuỗi thời gian MySQL (VD: '2026-09-23 14:36:00')
- * @returns {number} Thời gian quy đổi sang timestamp (milliseconds)
- */
+// Chuyển đổi chuỗi thời gian định dạng MySQL sang timestamp dạng số (milliseconds).
 function parseTime(mysqlTime) {
   return new Date(String(mysqlTime).replace(' ', 'T')).getTime();
 }
 
-/**
- * Component Dashboard: Hiển thị trang tổng quan.
- * Bao gồm: 3 thẻ thông số mới nhất, biểu đồ dữ liệu thời gian thực và danh sách thiết bị để điều khiển.
- * @returns {JSX.Element} Giao diện trang Dashboard
- */
 export default function Dashboard() {
   const latestPoll = usePolling(getDataLatest, 2000, [], 'dashboard:latest');
   const chartPoll = usePolling((signal) => getDataChart(30, signal), 2000, [], 'dashboard:chart');
@@ -73,20 +47,12 @@ export default function Dashboard() {
   const latestAge = latest?.created_at ? Date.now() - parseTime(latest.created_at) : Number.POSITIVE_INFINITY;
   const isLive = Boolean(latest) && !pollError && latestAge < STALE_MS;
 
-  /**
-   * Lấy trạng thái hiển thị của một thiết bị.
-   * Ưu tiên trạng thái đang chờ xử lý (pending) nếu có, ngược lại trả về trạng thái thật của thiết bị.
-   * @param {Object} device - Thông tin của thiết bị
-   * @returns {string} Trạng thái cần hiển thị ('ON' hoặc 'OFF')
-   */
+  // Lấy trạng thái hiển thị của một thiết bị.
   function displayedState(device) {
     return pending[device.name] || device.state;
   }
 
-  /**
-   * Xóa trạng thái đang chờ xử lý của một thiết bị khỏi state pending.
-   * @param {string} deviceName - Tên của thiết bị cần xóa khỏi danh sách pending
-   */
+  // Xóa trạng thái đang chờ xử lý của thiết bị.
   function clearPending(deviceName) {
     delete pendingStartRef.current[deviceName];
     setPending((prev) => {
@@ -127,11 +93,17 @@ export default function Dashboard() {
     if (changed) setPending(next);
   }, [deviceList, pending]);
 
-  /**
-   * Xử lý khi người dùng nhấn nút chuyển đổi (toggle) trạng thái thiết bị.
-   * Cập nhật trạng thái pending cục bộ ngay lập tức (optimistic UI) và gửi API gọi lệnh.
-   * @param {Object} device - Thiết bị cần điều khiển
-   */
+  // Cảnh báo khi nhiệt độ vượt quá 30 độ C
+  useEffect(() => {
+    if (latest && latest.temperature > 40) {
+      setToast({
+        type: 'error',
+        message: `CẢNH BÁO: Nhiệt độ vượt ngưỡng an toàn (${latest.temperature}°C)!`,
+      });
+    }
+  }, [latest?.temperature]);
+
+  // Xử lý bật/tắt thiết bị (optimistic UI + gọi API).
   async function handleToggle(device) {
     if (pending[device.name]) return;
     const target = displayedState(device) === 'ON' ? 'OFF' : 'ON';
@@ -152,11 +124,14 @@ export default function Dashboard() {
   return (
     <div className="page">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      {/* 3 thẻ stat */}
+
+      {/* 3 thẻ thống kê (Nhiệt độ, Độ ẩm, Ánh sáng) */}
       <section className="stat-grid">
         <StatCard
           icon={<TempIcon />}
           from="#fc9797" to="#991b1b" min={0} max={50}
+          // from={latest?.temperature > 30 ? "#ff0000" : "#fc9797"} 
+          // to={latest?.temperature > 30 ? "#7f0000" : "#991b1b"} 
           label="Temperature"
           unit="°C"
           value={latest ? latest.temperature : null}
@@ -177,12 +152,13 @@ export default function Dashboard() {
         />
       </section>
 
-      {/* Chart */}
+      {/* Biểu đồ cảm biến Realtime */}
       <section className="card chart-card">
         <div className="card-header">
           <h2 className="card-title">Realtime Sensor Data</h2>
           <span className={`live-dot${isLive ? '' : ' offline'}`}>{liveLabel}</span>
         </div>
+
         {chartPoll.error && (
           <p className="error-text">Cannot load chart: {chartPoll.error}</p>
         )}
@@ -228,7 +204,7 @@ export default function Dashboard() {
         )}
       </section>
 
-        {/* device-control */}
+      {/* Điều khiển thiết bị (LED) */}
       <section className="device-section">
         <h2 className="section-title">Device Control</h2>
         <div className="device-grid">

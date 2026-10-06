@@ -1,9 +1,3 @@
-/**
- * Nhóm giá trị:
- * - db: host/port/user/password/database/connectionLimit (MySQL pool, xem db.js)
- * - mqtt: url broker, username/password, timeout lệnh, các topic
- * - defaultUserId: user mặc định cho /api/profile và cột userID trong action
- */
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,11 +5,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// Chuyển đổi an toàn chuỗi sang số kèm giá trị mặc định
 function toNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+// Đối tượng cấu hình biến môi trường toàn cục (Environment Variables)
 export const env = {
   port: toNumber(process.env.PORT, 3000),
   db: {

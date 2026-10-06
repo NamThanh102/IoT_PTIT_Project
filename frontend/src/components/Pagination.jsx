@@ -1,10 +1,5 @@
 /**
  * Pagination.jsx — Điều khiển phân trang (dùng cho 2 table DataSensor & ActionHistory)
- *
- * - buildPages: liệt kê trang với dấu ... cho khoảng lớn (luôn giữ trang 1 và cuối).
- * - Prev/Next disable ở biên; kèm form "Go to" nhảy thẳng tới trang.
- * - Ẩn hoàn toàn nếu total_pages ≤ 1.
- * Props: pagination {current_page,total_pages}, onPageChange.
  */
 import { useState } from 'react';
 

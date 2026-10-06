@@ -1,3 +1,4 @@
+// Xử lý lỗi 404 khi truy cập vào endpoint không tồn tại
 export function notFoundHandler(req, res) {
   res.status(404).json({
     status: 'error',
@@ -5,6 +6,7 @@ export function notFoundHandler(req, res) {
   });
 }
 
+// Bộ xử lý lỗi tập trung toàn hệ thống (Global Error Handler)
 export function errorHandler(error, req, res, next) {
   const httpStatus = error.httpStatus || 500;
   if (httpStatus >= 500) {

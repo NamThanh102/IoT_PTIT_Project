@@ -1,21 +1,3 @@
-/**
- * pages/DataSensor.jsx — Trang xem dữ liệu cảm biến dạng bảng (phân trang + lọc)
- *
- * Luồng dữ liệu:
- * - Form lọc 1 dropdown (Tất cả/SensorID/Temp/Humi/Light/Time) + 1 ô giá trị → appliedFilters + page.
- *   + Tất cả/Temp/Humi/Light: tìm theo giá trị (query); riêng Temp/Humi/Light còn giới hạn loại cảm biến.
- *   + SensorID: tìm chính xác theo mã sensorID.
- *   + Time: tìm theo chuỗi thời gian; backend so prefix nên tự hiểu độ chính xác:
- *     2026-09-23 14:36:00 → theo giây, 2026-09-23 14:36 → theo phút,
- *     2026-09-23 14 → theo giờ, 2026-09-23 → theo ngày, 2026-09 → theo tháng, 2026 → theo năm.
- * - Nút sort (Giảm dần/Tăng dần) kết hợp được với bộ lọc; mặc định giảm dần theo time.
- * - Số dòng mỗi trang (Rows/page, ô nhập số bất kỳ, mặc định 10) → đổi limit tự về page 1.
- * - Dòng nằm trong table-footer (kèm Total + Pagination) vì thuộc phân trang, KHÔNG phải bộ lọc.
- * - usePolling(getDataAll(...), pollInterval, deps, cacheKey):
- *   pollInterval = 0 khi đang lọc (không tự poll, chỉ fetch khi đổi page/sort/Reload),
- *   3000 khi không lọc; cacheKey = fingerprint(page + filter + sort) để cache riêng từng tổ hợp.
- * - Bảng 4 cột (SensorID, loại + màu, giá trị + đơn vị, thời gian) + Pagination + nút Reload.
- */
 import { useState } from 'react';
 import Pagination from '../components/Pagination.jsx';
 import { usePolling } from '../hooks/usePolling.js';
@@ -36,11 +18,6 @@ const TIME_HINT =
 const UNIT_MAP = { Temperature: '°C', Humidity: '%', Light: 'lux' };
 const TYPE_COLOR = { Temperature: '#b91c1c', Humidity: '#0369a1', Light: '#a16207' };
 
-/**
- * Component DataSensor: Trang hiển thị bảng dữ liệu cảm biến.
- * Hỗ trợ chức năng lọc dữ liệu theo nhiều tiêu chí, sắp xếp theo thời gian và phân trang.
- * @returns {JSX.Element} Giao diện trang dữ liệu cảm biến
- */
 export default function DataSensor() {
   const [field, setField] = useState('ALL');
   const [queryInput, setQueryInput] = useState('');
@@ -78,27 +55,19 @@ export default function DataSensor() {
     cacheKey
   );
 
-  /**
-   * Đảo ngược thứ tự sắp xếp thời gian của bảng (Tăng dần <-> Giảm dần) và đưa về trang đầu tiên.
-   */
+  // Đảo ngược thứ tự sắp xếp thời gian của bảng (Tăng dần <-> Giảm dần) và đưa về trang đầu tiên.
   function toggleSort() {
     setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
     setPage(1);
   }
 
-  /**
-   * Thay đổi giới hạn số bản ghi hiển thị trên mỗi trang.
-   * @param {number} nextLimit - Số bản ghi mong muốn trên một trang
-   */
+  // Thay đổi giới hạn số bản ghi hiển thị trên mỗi trang.
   function changeLimit(nextLimit) {
     setLimit(nextLimit);
     setPage(1);
   }
 
-  /**
-   * Xác nhận và áp dụng giới hạn số bản ghi mới sau khi người dùng nhập vào ô.
-   * Đảm bảo giá trị nhập vào là một số hợp lệ lớn hơn hoặc bằng 1.
-   */
+  // Xác nhận và áp dụng giới hạn số bản ghi mới sau khi người dùng nhập vào ô.
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
@@ -109,19 +78,14 @@ export default function DataSensor() {
     }
   }
 
-  /**
-   * Áp dụng các điều kiện lọc khi form được submit.
-   * @param {Event} event - Sự kiện submit form
-   */
+  // Áp dụng các điều kiện lọc khi form được submit.
   function applyFilter(event) {
     event.preventDefault();
     setAppliedFilters({ field, query: queryInput.trim() });
     setPage(1);
   }
 
-  /**
-   * Xóa tất cả các điều kiện lọc và đưa bảng về trạng thái mặc định (trang 1, không lọc).
-   */
+  // Xóa tất cả các điều kiện lọc và đưa bảng về trạng thái mặc định (trang 1, không lọc).
   function clearFilter() {
     setField('ALL');
     setQueryInput('');
@@ -131,8 +95,10 @@ export default function DataSensor() {
 
   return (
     <div className="page">
+      {/* Bộ lọc tìm kiếm dữ liệu */}
       <section className="card">
         <form className="filter-grid" onSubmit={applyFilter}>
+          
           <div className="filter-group">
             <label className="filter-label">Search by</label>
             <select
@@ -145,6 +111,7 @@ export default function DataSensor() {
               ))}
             </select>
           </div>
+
           <div className="filter-group">
             <label className="filter-label">
               {field === 'Time' ? 'Time' : field === 'SensorID' ? 'SensorID' : 'Value'}
@@ -156,7 +123,8 @@ export default function DataSensor() {
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
             />
-          </div>
+          </div> 
+
           <div className="filter-actions">
             <button type="submit" className="btn-primary">
               Filter
@@ -165,9 +133,11 @@ export default function DataSensor() {
               Clear
             </button>
           </div>
+
         </form>
       </section>
 
+      {/* Bảng dữ liệu cảm biến */}
       <section className="card table-card">
         <div className="card-header">
           <h3 className="card-title">Sensor Data</h3>
@@ -221,6 +191,8 @@ export default function DataSensor() {
                 ))}
               </tbody>
             </table>
+
+            {/* Phân trang và số dòng/trang */}
             <div className="table-footer">
               <span className="total-text">
                 Total: {data.pagination.total_records} records

@@ -1,8 +1,5 @@
 /**
  * Header.jsx — Thanh tiêu đề trên cùng
- *
- * Props: pathname, name (tên từ /api/profile), msv (mã sinh viên).
- * Fallback cứng giữ nguyên khi Layout chưa nhận profile.
  */
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',

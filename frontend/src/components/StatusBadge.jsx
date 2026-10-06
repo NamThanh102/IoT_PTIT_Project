@@ -1,9 +1,5 @@
 /**
- * StatusBadge.jsx — Nhãn trạng thái tác động thiết bị (dùng trong bảng lịch sử)
- *
- * - Chuẩn hoá lowercase để map màu: ON xanh lá / OFF xám / LOADING xanh dương / FAILED đỏ.
- * - Hiển thị chữ IN HOA; LOADING kèm spinner.
- * - Props: status.
+ * StatusBadge.jsx — Nhãn trạng thái tác động thiết bị (dùng trong actionHistory)
  */
 const STATE_STYLE = {
   on: { background: '#dcfce7', color: '#166534' },

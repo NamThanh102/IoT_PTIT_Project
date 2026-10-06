@@ -1,10 +1,5 @@
 /**
  * Icons.jsx — Bộ icon SVG inline dùng chung toàn app
- *
- * Icon điều hướng (size mặc định 18): DashboardIcon, SensorIcon, HistoryIcon, UserIcon
- * Icon số liệu (size mặc định 22): TempIcon, HumiIcon, LightIcon
- * Icon thương hiệu/liên kết (trang Profile): GithubIcon, FigmaIcon, PostmanIcon, DocsIcon, ExternalLinkIcon
- * Tất cả kế thừa màu currentColor (dùng cho CSS color hiện tại).
  */
 export function DashboardIcon({ size = 18 }) {
   return (

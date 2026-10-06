@@ -1,8 +1,5 @@
 /**
- * Toast.jsx — Thông báo nổi tạm thời (success / error)
- *
- * Tự động đóng sau `duration` (mặc định 4s); có nút × đóng sớm.
- * Props: message, type, onClose, duration.
+ * Toast.jsx — Thông báo nổi tạm thời (success / error
  */
 import { useEffect } from 'react';
 

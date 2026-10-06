@@ -1,8 +1,5 @@
 /**
  * Layout.jsx — Khung bố cục chung của app (mọi trang dùng chung)
- *
- * - getProfile() 1 lần lúc mount → truyền name/msv vào Header + Sidebar
- *   (fallback giữ giá trị mặc định khi API chưa trả / lỗi).
  */
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -36,9 +33,15 @@ export default function Layout() {
 
   return (
     <div className="layout">
+      {/* Sidebar thanh điều hướng bên trái */}
       <Sidebar msv={user.msv} />
+
+      {/* Khu vực nội dung chính */}
       <div className="layout-main">
+        {/* Header trên cùng */}
         <Header pathname={pathname} name={user.name} msv={user.msv} />
+
+        {/* Nội dung trang tương ứng */}
         <main className="layout-content">
           <Outlet />
         </main>

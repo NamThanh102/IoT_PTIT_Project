@@ -1,16 +1,3 @@
-/**
- * controllers/sensorController.js — Nghiệp vụ dữ liệu cảm biến
- *
- * Hàm export (handler):
- * - saveSensorSample({temp,humi,light})  [MQTT] ghi 3 cảm biến vào datasensors
- * - getLatest(req)     GET /api/data/latest
- * - getChart(req)      GET /api/data/chart?limit=N
- * - getAllData(req)    GET /api/data/getall?page&limit&time&sensorId&name&value&sort(asc|desc)
- *
- * Helper nội bộ: GROUPED_SELECT gộp Temperature/Humidity/Light theo từng mốc time,
- * filter time linh hoạt qua parseFlexibleTime, phân trang DESC (trang 1 = mới nhất).
- * Định danh cảm biến là `name` (không còn code/sensor_uid).
- */
 import { pool } from '../config/db.js';
 import { DataSensor } from '../models/DataSensor.js';
 import { Sensor } from '../models/Sensor.js';
@@ -32,25 +19,9 @@ const GROUPED_SELECT = `
   JOIN ${tableName('sensors')} s ON s.id = d.sensorID
 `;
 
-// Tìm kiếm id của cảm biến theo tên
-async function findSensorByName(name) {
-  const { sql, params } = buildSelect(Sensor, {
-    columns: ['id'],
-    where: [{ sql: 'name = ?', params: [name] }],
-    limit: 1,
-  });
-  const [rows] = await pool.query(sql, params);
-  return rows.length > 0 ? rows[0].id : null;
-}
-
-//Lấy danh sách ID của tất cả các cảm biến
-async function getSensorIds() {
-  const map = {};
-  for (const name of SENSOR_NAMES) {
-    map[name] = await findSensorByName(name);
-  }
-  return map;
-}
+// ============================================================
+// NHÓM 1: HÀM PHỤ PHỤC VỤ DỮ LIỆU REALTIME & BIỂU ĐỒ (Dùng cho getLatest, getChart)
+// ============================================================
 
 // Lấy mẫu dữ liệu cảm biến mới nhất
 async function getLatestSample() {
@@ -71,6 +42,68 @@ async function getRecentSamples(limitSamples) {
     LIMIT ${safeLimit}`;
   const [rows] = await pool.query(sql);
   return rows.reverse();
+}
+
+// ============================================================
+// NHÓM 2: HÀM PHỤ PHỤC VỤ LƯU DỮ LIỆU CẢM BIẾN TỪ MQTT (Dùng cho saveSensorSample)
+// ============================================================
+
+// Tìm kiếm id của cảm biến theo tên
+async function findSensorByName(name) {
+  const { sql, params } = buildSelect(Sensor, {
+    columns: ['id'],
+    where: [{ sql: 'name = ?', params: [name] }],
+    limit: 1,
+  });
+  const [rows] = await pool.query(sql, params);
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+// Lấy danh sách ID của tất cả các cảm biến
+async function getSensorIds() {
+  const map = {};
+  for (const name of SENSOR_NAMES) {
+    map[name] = await findSensorByName(name);
+  }
+  return map;
+}
+
+// Thêm một mẫu dữ liệu cảm biến mới vào database
+async function insertSample({ sensorId, value, time }) {
+  const { sql, params } = buildInsert(DataSensor, {
+    id: newId(),
+    sensorID: sensorId,
+    value,
+    created_at: time,
+  });
+  await pool.execute(sql, params);
+}
+
+// ============================================================
+// NHÓM 3: HÀM PHỤ PHỤC VỤ BẢNG DỮ LIỆU CẢM BIẾN (Dùng cho getAllData)
+// ============================================================
+
+// Chuẩn hóa và xác thực các bộ lọc dữ liệu
+function resolveFilters({ time, name, value, sensorId }) {
+  const timeRange = parseFlexibleTime(time);
+  if (time && !timeRange) {
+    throw badRequest('Dinh dang thoi gian khong hop le. Vi du: 2026 / 2026-08 / 2026-08-22 / "2026-08-22 10" / "2026-08-22 10:30" / "2026-08-22 10:30:45"');
+  }
+  const filters = { timeRange };
+  if (name) {
+    filters.sensorName = String(name).trim();
+  }
+  if (sensorId) {
+    filters.sensorId = String(sensorId).trim();
+  }
+  if (value !== undefined && value !== null && String(value).trim() !== '') {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      throw badRequest('value must be a number');
+    }
+    filters.value = num;
+  }
+  return filters;
 }
 
 // Xây dựng các điều kiện lọc dữ liệu cảm biến
@@ -120,40 +153,6 @@ async function countAllData(filters) {
   return Number(rows[0].total);
 }
 
-// Thêm một mẫu dữ liệu cảm biến mới
-async function insertSample({ sensorId, value, time }) {
-  const { sql, params } = buildInsert(DataSensor, {
-    id: newId(),
-    sensorID: sensorId,
-    value,
-    created_at: time,
-  });
-  await pool.execute(sql, params);
-}
-
-// Chuẩn hóa và xác thực các bộ lọc dữ liệu
-function resolveFilters({ time, name, value, sensorId }) {
-  const timeRange = parseFlexibleTime(time);
-  if (time && !timeRange) {
-    throw badRequest('Dinh dang thoi gian khong hop le. Vi du: 2026 / 2026-08 / 2026-08-22 / "2026-08-22 10" / "2026-08-22 10:30" / "2026-08-22 10:30:45"');
-  }
-  const filters = { timeRange };
-  if (name) {
-    filters.sensorName = String(name).trim();
-  }
-  if (sensorId) {
-    filters.sensorId = String(sensorId).trim();
-  }
-  if (value !== undefined && value !== null && String(value).trim() !== '') {
-    const num = Number(value);
-    if (!Number.isFinite(num)) {
-      throw badRequest('value must be a number');
-    }
-    filters.value = num;
-  }
-  return filters;
-}
-
 // Truy vấn dữ liệu cảm biến và phân trang (dùng cho API)
 async function queryAllData({ page = 1, limit = 10, time, name, value, sensorId, sort }) {
   const safePage = Math.max(1, Number(page) || 1);
@@ -179,7 +178,7 @@ async function queryAllData({ page = 1, limit = 10, time, name, value, sensorId,
 
 //===================================================================================================
 
-// Lưu mẫu dữ liệu từ các cảm biến vào db
+// MQTT Handler: Lưu mẫu dữ liệu cảm biến vào DB (Sử dụng hàm phụ: getSensorIds, insertSample)
 export async function saveSensorSample({ temp, humi, light }) {
   const ids = await getSensorIds();
   const now = new Date();
@@ -204,7 +203,7 @@ export async function saveSensorSample({ temp, humi, light }) {
   return { savedAt: mysqlTime };
 }
 
-//API Handler: Lấy dữ liệu 1 cảm biến mới nhất
+// API Handler: Lấy dữ liệu 1 cảm biến mới nhất (Sử dụng hàm phụ: getLatestSample)
 export async function getLatest(req, res, next) {
   try {
     const data = await getLatestSample();
@@ -214,7 +213,7 @@ export async function getLatest(req, res, next) {
   }
 }
 
-// API Handler: Lấy dữ liệu n cảm biến để vẽ chart
+// API Handler: Lấy dữ liệu n cảm biến để vẽ chart (Sử dụng hàm phụ: getRecentSamples)
 export async function getChart(req, res, next) {
   try {
     const limit = Number(req.query.limit) || 20;
@@ -225,7 +224,7 @@ export async function getChart(req, res, next) {
   }
 }
 
-// API Handler: Lấy tất cả dữ liệu cảm biến có lọc và phân trang
+// API Handler: Lấy tất cả dữ liệu cảm biến có lọc và phân trang (Sử dụng hàm phụ: queryAllData -> resolveFilters, findAllData, countAllData)
 export async function getAllData(req, res, next) {
   try {
     const { page = 1, limit = 10, time, name, value, sensorId, sort } = req.query;

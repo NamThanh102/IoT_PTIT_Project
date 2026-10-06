@@ -15,6 +15,7 @@ async function findUserById(id) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+// API Handler: Lấy thông tin cá nhân sinh viên (Sử dụng hàm phụ: findUserById)
 export async function getProfile(req, res, next) {
   try {
     const data = await findUserById(env.defaultUserId);

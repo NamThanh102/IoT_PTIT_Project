@@ -1,4 +1,4 @@
-// utils/response.js — Format response JSON chuẩn cho mọi endpoint
+// Chuẩn hóa định dạng JSON trả về cho các API thành công
 export function ok(res, { data = null, message = 'Thanh cong', pagination = undefined, httpStatus = 200 } = {}) {
   const body = { status: 'success', message, data };
   if (pagination) {

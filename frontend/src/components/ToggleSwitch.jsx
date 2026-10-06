@@ -1,9 +1,5 @@
 /**
  * ToggleSwitch.jsx — Nút bật/tắt thiết bị (LED)
- *
- * Trạng thái: 'ON' → hiện ON + nút gạt sang phải; 'OFF' → OFF;
- * 'loading' → spinner + disabled (đang chờ xác nhận từ backend).
- * Props: state, disabled, onClick.
  */
 export default function ToggleSwitch({ state, disabled, onClick }) {
   const isOn = state === 'ON';
