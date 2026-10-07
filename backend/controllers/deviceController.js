@@ -1,9 +1,6 @@
 import * as deviceService from '../services/deviceService.js';
 import { ok } from '../utils/response.js';
 
-export const handleDeviceResponse = deviceService.handleDeviceResponse;
-export const getDeviceStatus = deviceService.getDeviceStatus;
-
 // GET /api/device/status: Lấy trạng thái hoạt động hiện tại của tất cả đèn LED
 export async function getStatus(req, res, next) {
   try {

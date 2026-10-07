@@ -7,7 +7,6 @@ import { newId } from '../utils/id.js';
 import { parseFlexibleTime } from '../utils/timeRange.js';
 import { badRequest } from '../utils/ApiError.js';
 
-const SENSOR_NAMES = ['Temperature', 'Humidity', 'Light'];
 let sensorIdCache = null;
 
 const GROUPED_SELECT = `
@@ -20,36 +19,13 @@ const GROUPED_SELECT = `
   JOIN ${tableName('sensors')} s ON s.id = d.sensorID
 `;
 
-// Tìm ID cảm biến theo tên trong DB
-async function findSensorByName(name) {
-  const { sql, params } = buildSelect(Sensor, {
-    columns: ['id'],
-    where: [{ sql: 'name = ?', params: [name] }],
-    limit: 1,
-  });
-  const [rows] = await pool.query(sql, params);
-  return rows.length > 0 ? rows[0].id : null;
-}
-
 // Lấy danh sách ánh xạ tên -> ID của các cảm biến (có cache)
 async function getSensorIds() {
   if (sensorIdCache) return sensorIdCache;
-  const map = {};
-  for (const name of SENSOR_NAMES) {
-    map[name] = await findSensorByName(name);
-  }
-  sensorIdCache = map;
-  return map;
-}
-
-// Lấy 1 mẫu đo mới nhất của cả 3 cảm biến
-export async function getLatestSample() {
-  const sql = `${GROUPED_SELECT}
-    GROUP BY d.created_at
-    ORDER BY d.created_at DESC
-    LIMIT 1`;
-  const [rows] = await pool.query(sql);
-  return rows.length > 0 ? rows[0] : null;
+  const { sql, params } = buildSelect(Sensor, { columns: ['id', 'name'] });
+  const [rows] = await pool.query(sql, params);
+  sensorIdCache = Object.fromEntries(rows.map((r) => [r.name, r.id]));
+  return sensorIdCache;
 }
 
 // Lấy N mẫu đo gần nhất (sắp xếp tăng dần theo thời gian) để vẽ biểu đồ
@@ -108,17 +84,6 @@ async function countAllData(filters) {
   return Number(rows[0].total);
 }
 
-// Chèn một dòng giá trị cảm biến vào bảng datasensors
-async function insertSample({ sensorId, value, time }) {
-  const { sql, params } = buildInsert(DataSensor, {
-    id: newId(),
-    sensorID: sensorId,
-    value,
-    created_at: time,
-  });
-  await pool.execute(sql, params);
-}
-
 // Chuẩn hóa tham số lọc tìm kiếm thời gian, loại cảm biến, giá trị
 function resolveFilters({ time, name, value, sensorId }) {
   const timeRange = parseFlexibleTime(time);
@@ -174,11 +139,13 @@ export async function saveSensorSample({ temp, humi, light }) {
 
   for (const sample of samples) {
     if (sample.value === undefined || sample.value === null || Number.isNaN(Number(sample.value))) continue;
-    await insertSample({
-      sensorId: ids[sample.name],
+    const { sql, params } = buildInsert(DataSensor, {
+      id: newId(),
+      sensorID: ids[sample.name],
       value: Number(sample.value),
-      time: mysqlTime,
+      created_at: mysqlTime,
     });
+    await pool.execute(sql, params);
   }
 
   return { savedAt: mysqlTime };

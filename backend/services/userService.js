@@ -5,21 +5,15 @@ import { User } from '../models/User.js';
 import { buildSelect } from '../utils/queryBuilder.js';
 import { notFoundError } from '../utils/ApiError.js';
 
-// Tìm thông tin người dùng trong DB theo ID
-async function findUserById(id) {
+// Lấy thông tin hồ sơ của sinh viên mặc định
+export async function getUserProfile() {
   const { sql, params } = buildSelect(User, {
-    where: [{ sql: 'id = ?', params: [id] }],
+    where: [{ sql: 'id = ?', params: [env.defaultUserId] }],
     limit: 1,
   });
   const [rows] = await pool.query(sql, params);
-  return rows.length > 0 ? rows[0] : null;
-}
-
-// Lấy thông tin hồ sơ của sinh viên mặc định
-export async function getUserProfile() {
-  const user = await findUserById(env.defaultUserId);
-  if (!user) {
+  if (rows.length === 0) {
     throw notFoundError('Chua co thong tin user trong DB');
   }
-  return user;
+  return rows[0];
 }

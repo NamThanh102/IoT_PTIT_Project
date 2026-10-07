@@ -25,11 +25,6 @@ function formatTime(mysqlTime) {
   return mysqlTime.slice(11);
 }
 
-// Chuyển đổi chuỗi thời gian định dạng MySQL sang timestamp dạng số (milliseconds).
-function parseTime(mysqlTime) {
-  return new Date(String(mysqlTime).replace(' ', 'T')).getTime();
-}
-
 export default function Dashboard() {
   const latestPoll = usePolling(getDataLatest, 2000, [], 'dashboard:latest');
   const chartPoll = usePolling((signal) => getDataChart(30, signal), 2000, [], 'dashboard:chart');
@@ -44,7 +39,9 @@ export default function Dashboard() {
   const chart = chartPoll.data?.data || [];
   const deviceList = devicesPoll.data?.data || [];
 
-  const latestAge = latest?.created_at ? Date.now() - parseTime(latest.created_at) : Number.POSITIVE_INFINITY;
+  const latestAge = latest?.created_at
+    ? Date.now() - new Date(String(latest.created_at).replace(' ', 'T')).getTime()
+    : Number.POSITIVE_INFINITY;
   const isLive = Boolean(latest) && !pollError && latestAge < STALE_MS;
 
   // Lấy trạng thái hiển thị của một thiết bị.
@@ -94,14 +91,28 @@ export default function Dashboard() {
   }, [deviceList, pending]);
 
   // Cảnh báo khi nhiệt độ vượt quá 30 độ C
-  useEffect(() => {
-    if (latest && latest.temperature > 40) {
-      setToast({
-        type: 'error',
-        message: `CẢNH BÁO: Nhiệt độ vượt ngưỡng an toàn (${latest.temperature}°C)!`,
-      });
-    }
-  }, [latest?.temperature]);
+  // useEffect(() => {
+  //   if (latest && latest.temperature > 40) {
+  //     setToast({
+  //       type: 'error',
+  //       message: `CẢNH BÁO: Nhiệt độ vượt ngưỡng an toàn (${latest.temperature}°C)!`,
+  //     });
+  //   }
+  // }, [latest?.temperature]);
+
+  // Chế độ tự động bật/tắt đèn theo ánh sáng (Smart Mode)
+  // useEffect(() => {
+  //   if (!latest) return;
+  //   const led1 = deviceList.find((d) => d.name === 'LED_1');
+  //   if (!led1 || pending['LED_1']) return;
+  //   if (latest.light < 200 && displayedState(led1) === 'OFF') {
+  //     handleToggle(led1);
+  //   } else if (latest.light > 800 && displayedState(led1) === 'ON') {
+  //     handleToggle(led1);
+  //   }
+  // }, [latest?.light]);
+
+
 
   // Xử lý bật/tắt thiết bị (optimistic UI + gọi API).
   async function handleToggle(device) {
@@ -120,6 +131,15 @@ export default function Dashboard() {
   }
 
   const liveLabel = latestPoll.loading && !latest ? 'Connecting...' : isLive ? 'Live' : 'Sensor Offline';
+  // // Bật thông báo Toast đỏ khi cảm biến mất kết nối (quá 10s không có dữ liệu)
+  // useEffect(() => {
+  //   if (!isLive && latest) {
+  //     setToast({
+  //       type: 'error',
+  //       message: 'CẢNH BÁO: Cảm biến bị mất kết nối (Sensor Offline)!',
+  //     });
+  //   }
+  // }, [isLive]);
 
   return (
     <div className="page">

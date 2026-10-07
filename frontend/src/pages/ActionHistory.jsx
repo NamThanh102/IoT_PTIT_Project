@@ -73,17 +73,12 @@ export default function ActionHistory() {
     setPage(1);
   }
 
-  // Cập nhật số dòng hiển thị tối đa trên một trang và quay về trang 1.
-  function changeLimit(nextLimit) {
-    setLimit(nextLimit);
-    setPage(1);
-  }
-
-  // Xác nhận lại ô input số dòng mỗi trang để áp dụng.
+  // Xác nhận và áp dụng số dòng mỗi trang từ ô nhập (nếu hợp lệ thì đổi limit và về trang 1).
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
-      changeLimit(n);
+      setLimit(n);
+      setPage(1);
       setLimitInput(String(n));
     } else {
       setLimitInput(String(limit));

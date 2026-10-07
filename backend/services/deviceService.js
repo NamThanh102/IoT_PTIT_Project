@@ -36,23 +36,6 @@ function clearPendingTimer(deviceId) {
   }
 }
 
-// Chuẩn hóa trạng thái hiển thị
-function normalizeState(status, action) {
-  if (status === 'loading') return 'loading';
-  if (status === 'failed') return action === 'ON' ? 'OFF' : 'ON';
-  return status;
-}
-
-// Lấy danh sách tất cả thiết bị trong DB
-async function listDevices() {
-  const { sql, params } = buildSelect(Device, {
-    columns: ['id', 'name'],
-    order: 'name ASC',
-  });
-  const [rows] = await pool.query(sql, params);
-  return rows;
-}
-
 // Tìm thiết bị theo tên chính xác (VD: LED_1)
 async function findDeviceByName(name) {
   const { sql, params } = buildSelect(Device, {
@@ -62,16 +45,6 @@ async function findDeviceByName(name) {
   });
   const [rows] = await pool.query(sql, params);
   return rows.length > 0 ? rows[0] : null;
-}
-
-// Tìm danh sách ID thiết bị theo tên gần đúng (phục vụ lọc lịch sử)
-async function findDevicesByNamePart(namePart) {
-  const { sql, params } = buildSelect(Device, {
-    columns: ['id'],
-    where: [{ sql: 'name LIKE ?', params: [`%${namePart}%`] }],
-  });
-  const [rows] = await pool.query(sql, params);
-  return rows.map((row) => row.id);
 }
 
 // Thêm một bản ghi vào bảng action
@@ -98,9 +71,15 @@ async function findLatestLoadingAction(deviceId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
-// Lấy hành động mới nhất của từng thiết bị (bỏ qua loading)
-async function findLatestActionPerDevice() {
-  const sql = `
+// Lấy trạng thái hoạt động hiện tại của tất cả đèn LED (GET /api/device/status)
+export async function getDeviceStatus() {
+  const { sql: devSql, params: devParams } = buildSelect(Device, {
+    columns: ['id', 'name'],
+    order: 'name ASC',
+  });
+  const [devices] = await pool.query(devSql, devParams);
+
+  const actionSql = `
     SELECT a.id, a.action, a.status, a.created_at, a.deviceID AS deviceId
     FROM ${tableName('action')} a
     JOIN (
@@ -110,25 +89,21 @@ async function findLatestActionPerDevice() {
       GROUP BY deviceID
     ) latest ON latest.deviceID = a.deviceID AND latest.maxCreated = a.created_at
     WHERE LOWER(a.status) <> 'loading'`;
-  const [rows] = await pool.query(sql);
-  return rows;
-}
+  const [actions] = await pool.query(actionSql);
+  const latestByDevice = new Map(actions.map((row) => [row.deviceId, row]));
 
-// Lấy trạng thái hoạt động hiện tại của tất cả đèn LED (GET /api/device/status)
-export async function getDeviceStatus() {
-  const devices = await listDevices();
-  const latestByDevice = new Map();
-  for (const row of await findLatestActionPerDevice()) {
-    latestByDevice.set(row.deviceId, row);
-  }
   return devices
     .filter((device) => LED_NAME_TO_KEY[device.name])
     .map((device) => {
       const latest = latestByDevice.get(device.id);
+      let state = 'OFF';
+      if (latest) {
+        state = latest.status === 'failed' ? (latest.action === 'ON' ? 'OFF' : 'ON') : latest.status;
+      }
       return {
         device_id: device.id,
         name: device.name,
-        state: latest ? normalizeState(latest.status, latest.action) : 'OFF',
+        state,
         last_action: latest ? latest.action : null,
         last_status: latest ? latest.status : null,
         updated_at: latest ? latest.created_at : null,
@@ -315,7 +290,12 @@ export async function queryHistory({ page = 1, limit = 10, status = 'ALL', time,
 
   let deviceIds = null;
   if (deviceId) {
-    deviceIds = await findDevicesByNamePart(String(deviceId).trim());
+    const { sql, params } = buildSelect(Device, {
+      columns: ['id'],
+      where: [{ sql: 'name LIKE ?', params: [`%${String(deviceId).trim()}%`] }],
+    });
+    const [rows] = await pool.query(sql, params);
+    deviceIds = rows.map((row) => row.id);
   }
 
   const resolvedDeviceID = deviceID ? String(deviceID).trim() : null;

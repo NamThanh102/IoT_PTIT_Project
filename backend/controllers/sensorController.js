@@ -1,12 +1,11 @@
 import * as sensorService from '../services/sensorService.js';
 import { ok } from '../utils/response.js';
 
-export const saveSensorSample = sensorService.saveSensorSample;
-
 // GET /api/data/latest: Lấy mẫu đo cảm biến mới nhất
 export async function getLatest(req, res, next) {
   try {
-    const data = await sensorService.getLatestSample();
+    const rows = await sensorService.getRecentSamples(1);
+    const data = rows.length > 0 ? rows[0] : null;
     return ok(res, { data, message: 'Lay du lieu cam bien moi nhat thanh cong' });
   } catch (error) {
     next(error);
@@ -24,7 +23,7 @@ export async function getChart(req, res, next) {
   }
 }
 
-// GET /api/data/getall: Lấy tất cả dữ liệu cảm biến có lọc và phân trang
+// GET /api/data/getall: Lấy tất cả dữ liệu cảm biến có filter+pagination
 export async function getAllData(req, res, next) {
   try {
     const { rows, pagination } = await sensorService.queryAllData(req.query);

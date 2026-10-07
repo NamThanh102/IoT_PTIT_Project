@@ -61,17 +61,12 @@ export default function DataSensor() {
     setPage(1);
   }
 
-  // Thay đổi giới hạn số bản ghi hiển thị trên mỗi trang.
-  function changeLimit(nextLimit) {
-    setLimit(nextLimit);
-    setPage(1);
-  }
-
-  // Xác nhận và áp dụng giới hạn số bản ghi mới sau khi người dùng nhập vào ô.
+  // Xác nhận và áp dụng số dòng mỗi trang từ ô nhập (nếu hợp lệ thì đổi limit và về trang 1).
   function commitLimit() {
     const n = Math.floor(Number(limitInput));
     if (Number.isFinite(n) && n >= 1) {
-      changeLimit(n);
+      setLimit(n);
+      setPage(1);
       setLimitInput(String(n));
     } else {
       setLimitInput(String(limit));
